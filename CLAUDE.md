@@ -32,7 +32,7 @@ Run a single test class or method:
 - Caffeine (Spring Cache abstraction) for caching PokeAPI responses.
 - JWT for stateless authentication (protected vs. public routes).
 - Config lives in `src/main/resources/application.yaml`.
-- Base package: `com.xaxage.pokemoninterface`.
+- Base package: `com.xaxage.be`.
 
 ## Coding Conventions
 
