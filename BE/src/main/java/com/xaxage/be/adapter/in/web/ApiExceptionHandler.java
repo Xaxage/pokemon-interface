@@ -5,6 +5,7 @@ import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import com.xaxage.be.domain.exception.PokemonNotStoredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
@@ -28,6 +29,14 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PokemonNotFoundException.class)
     ProblemDetail pokemonNotFound(PokemonNotFoundException notFound) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notFound.getMessage());
+    }
+
+    /**
+     * Says only that a valid token is needed; why the token was not accepted stays out of the response.
+     */
+    @ExceptionHandler(AuthenticationException.class)
+    ProblemDetail unauthenticated(AuthenticationException unauthenticated) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, "A valid bearer token is required.");
     }
 
     @ExceptionHandler(PokemonNotStoredException.class)

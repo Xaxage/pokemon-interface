@@ -18,3 +18,8 @@ spring:
 
 pokeapi:
   base-url: https://pokeapi.co/api/v2
+
+security:
+  jwt:
+    # HS256 key for bearer tokens, at least 32 bytes. Set JWT_SECRET outside local development.
+    secret: ${JWT_SECRET:local-development-secret-change-me-at-least-256-bits}

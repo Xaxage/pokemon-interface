@@ -6,6 +6,7 @@ import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -14,11 +15,16 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -42,6 +48,11 @@ class DataSynchronizationAcceptanceIT {
     private static final String BULBASAUR_SPRITE =
             "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png";
 
+    /**
+     * The key the application checks token signatures with, set for this test run only.
+     */
+    private static final String TOKEN_SECRET = "acceptance-test-secret-that-is-at-least-256-bits-long";
+
     @Autowired
     private MockMvcTester mvc;
 
@@ -61,6 +72,7 @@ class DataSynchronizationAcceptanceIT {
     @DynamicPropertySource
     static void pointAtStubPokeApi(DynamicPropertyRegistry registry) {
         registry.add("pokeapi.base-url", pokeApi::baseUrl);
+        registry.add("security.jwt.secret", () -> TOKEN_SECRET);
     }
 
     @BeforeEach
@@ -79,7 +91,8 @@ class DataSynchronizationAcceptanceIT {
         void bulbasaurIsCopiedWithOurOwnFieldsEmpty() {
             pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
 
-            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
 
             assertThat(response).hasStatus(HttpStatus.CREATED);
             assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
@@ -100,7 +113,8 @@ class DataSynchronizationAcceptanceIT {
         void unknownPokemonIsNotStored() {
             pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
 
-            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 99999).exchange();
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 99999)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
 
             assertThat(response).hasStatus(HttpStatus.NOT_FOUND);
             assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
@@ -125,7 +139,8 @@ class DataSynchronizationAcceptanceIT {
                     .update();
             pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
 
-            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
 
             assertThat(response).hasStatusOk();
             assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
@@ -212,6 +227,101 @@ class DataSynchronizationAcceptanceIT {
             assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
             assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
             assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
+        }
+    }
+
+    @Nested
+    @DisplayName("Must let only signed-in users synchronise; anyone can read the local list and details")
+    class LetsOnlySignedInUsersSynchronise {
+
+        @Test
+        @DisplayName("The one where a visitor with no token synchronises Bulbasaur, so they get a 401 and nothing is stored")
+        void visitorWithNoTokenCannotSynchronise() {
+            pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
+
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(database.sql("SELECT COUNT(*) FROM stored_pokemon").query(Integer.class).single())
+                    .isZero();
+        }
+
+        @Test
+        @DisplayName("The one where a signed-in user with a valid token synchronises Bulbasaur, so it is allowed")
+        void signedInUserCanSynchronise() {
+            pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
+
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.CREATED);
+        }
+
+        @Test
+        @DisplayName("The one where a visitor with no token lists the stored Pokémon, so it is allowed")
+        void visitorWithNoTokenCanList() {
+            stores(1, "bulbasaur", "Seed Pokémon", 69);
+
+            var response = mvc.get().uri("/api/stored-pokemon").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].name").asArray().containsExactly("bulbasaur");
+        }
+
+        @Test
+        @DisplayName("The one where a signed-in user with a valid token lists the stored Pokémon, so it is allowed")
+        void signedInUserCanList() {
+            stores(1, "bulbasaur", "Seed Pokémon", 69);
+
+            var response = mvc.get().uri("/api/stored-pokemon")
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].name").asArray().containsExactly("bulbasaur");
+        }
+
+        @Test
+        @DisplayName("The one where a visitor with no token views stored Bulbasaur, so it is allowed")
+        void visitorWithNoTokenCanView() {
+            stores(1, "bulbasaur", "Seed Pokémon", 69);
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.name").isEqualTo("bulbasaur");
+        }
+
+        @Test
+        @DisplayName("The one where a signed-in user with a valid token views stored Bulbasaur, so it is allowed")
+        void signedInUserCanView() {
+            stores(1, "bulbasaur", "Seed Pokémon", 69);
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn()).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.name").isEqualTo("bulbasaur");
+        }
+    }
+
+    /**
+     * @return the Authorization header of a user who has just signed in: a bearer token signed with HS256, valid
+     * for the next hour
+     */
+    private static String signedIn() {
+        var now = Instant.now().getEpochSecond();
+        var encoder = Base64.getUrlEncoder().withoutPadding();
+        var header = encoder.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        var claims = encoder.encodeToString("{\"sub\":\"demo\",\"iat\":%d,\"exp\":%d}"
+                .formatted(now, now + 3600).getBytes(StandardCharsets.UTF_8));
+        try {
+            var hmac = Mac.getInstance("HmacSHA256");
+            hmac.init(new SecretKeySpec(TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            var signature = encoder.encodeToString(
+                    hmac.doFinal((header + "." + claims).getBytes(StandardCharsets.UTF_8)));
+            return "Bearer " + header + "." + claims + "." + signature;
+        } catch (GeneralSecurityException impossible) {
+            throw new IllegalStateException(impossible);
         }
     }
 

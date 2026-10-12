@@ -14,6 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -24,8 +25,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 
 @WebMvcTest(StoredPokemonController.class)
+@Import(SecurityConfig.class)
 @DisplayName("Stored Pokémon endpoints")
 class StoredPokemonControllerTest {
 
@@ -53,7 +56,7 @@ class StoredPokemonControllerTest {
                     "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png",
                     null, null, List.of())));
 
-            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).with(jwt()).exchange();
 
             assertThat(response).hasStatus(HttpStatus.CREATED);
             assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
@@ -80,7 +83,7 @@ class StoredPokemonControllerTest {
             given(synchronisePokemon.synchronise(1)).willReturn(new Synchronisation.Refreshed(new StoredPokemon(1,
                     "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png", "Bisasam", "Kanto", List.of("starter"))));
 
-            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).with(jwt()).exchange();
 
             assertThat(response).hasStatusOk();
             assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
@@ -158,6 +161,23 @@ class StoredPokemonControllerTest {
             assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
             assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
             assertThat(response).bodyJson().extractingPath("$.detail").isEqualTo("No Pokémon with the id 25 is stored");
+        }
+    }
+
+    @Nested
+    @DisplayName("Must let only signed-in users synchronise; anyone can read the local list and details")
+    class LetsOnlySignedInUsersSynchronise {
+
+        @Test
+        @DisplayName("The one where a visitor with no token synchronises, so they get a 401 with the standard error body")
+        void visitorWithNoTokenGets401() {
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Unauthorized");
+            then(synchronisePokemon).shouldHaveNoInteractions();
         }
     }
 }
