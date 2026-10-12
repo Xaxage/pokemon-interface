@@ -1,9 +1,11 @@
 package com.xaxage.be.acceptance;
 
+import com.xaxage.be.BeApplication;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +29,7 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -304,6 +307,62 @@ class DataSynchronizationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must come pre-populated with demo data")
+    class ComesPrePopulatedWithDemoData {
+
+        @Test
+        @DisplayName("The one where the app starts with an empty database and the first 10 Pokémon (Bulbasaur … Caterpie) "
+                + "are already stored, without calling PokeAPI")
+        void appStartingWithAnEmptyDatabaseStoresTheFirstTenPokemon() {
+            var requestsBeforeStart = pokeApi.requestsReceived();
+
+            theAppStarts();
+
+            var response = mvc.get().uri("/api/stored-pokemon?page=0&size=20").exchange();
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].id").asArray()
+                    .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+            assertThat(response).bodyJson().extractingPath("$.content[*].name").asArray()
+                    .containsExactly("bulbasaur", "ivysaur", "venusaur", "charmander", "charmeleon", "charizard",
+                            "squirtle", "wartortle", "blastoise", "caterpie");
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(10);
+            assertThat(pokeApi.requestsReceived()).isEqualTo(requestsBeforeStart);
+        }
+
+        @Test
+        @DisplayName("The one where the app restarts with data already stored, so nothing is overwritten")
+        void appRestartingWithDataAlreadyStoredOverwritesNothing() {
+            database.sql("""
+                            INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
+                            VALUES (1, 'bulbasaur', 'Seed Pokémon', 69, ?, 'Bisasam', 'Kanto')""")
+                    .params(BULBASAUR_SPRITE)
+                    .update();
+
+            theAppStarts();
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(response).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
+        }
+
+        /**
+         * Starts a fresh instance of the application against the same database and PokeAPI, and stops it again once
+         * it has started.
+         */
+        private void theAppStarts() {
+            try (var app = new SpringApplicationBuilder(BeApplication.class)
+                    .properties(
+                            "server.port=0",
+                            "pokeapi.base-url=" + pokeApi.baseUrl(),
+                            "security.jwt.secret=" + TOKEN_SECRET)
+                    .run()) {
+                assertThat(app.isRunning()).isTrue();
+            }
+        }
+    }
+
     /**
      * @return the Authorization header of a user who has just signed in: a bearer token signed with HS256, valid
      * for the next hour
@@ -352,12 +411,14 @@ class DataSynchronizationAcceptanceIT {
     private static final class StubPokeApi {
 
         private final AtomicReference<List<StubPokemon>> catalogue = new AtomicReference<>(List.of());
+        private final AtomicInteger requestsReceived = new AtomicInteger();
         private HttpServer server;
 
         void start() throws IOException {
             server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
             server.createContext("/api/v2/pokemon/", this::pokemon);
             server.createContext("/api/v2/pokemon-species/", this::species);
+            server.createContext("/", exchange -> respond(exchange, 404, "Not Found"));
             server.start();
         }
 
@@ -367,6 +428,10 @@ class DataSynchronizationAcceptanceIT {
 
         String baseUrl() {
             return "http://localhost:" + server.getAddress().getPort() + "/api/v2";
+        }
+
+        int requestsReceived() {
+            return requestsReceived.get();
         }
 
         void serves(List<StubPokemon> pokemon) {
@@ -414,6 +479,7 @@ class DataSynchronizationAcceptanceIT {
         }
 
         private void respond(HttpExchange exchange, int status, String body) throws IOException {
+            requestsReceived.incrementAndGet();
             var bytes = body.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(status, bytes.length);

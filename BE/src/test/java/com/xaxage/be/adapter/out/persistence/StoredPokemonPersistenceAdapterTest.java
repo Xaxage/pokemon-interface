@@ -101,4 +101,24 @@ class StoredPokemonPersistenceAdapterTest {
             assertThat(adapter.findPage(0, 2)).isEqualTo(new StoredPokemonPage(List.of(bulbasaur, charmander), 3));
         }
     }
+
+    @Nested
+    @DisplayName("Must tell whether any Pokémon is stored")
+    class TellsWhetherAnyPokemonIsStored {
+
+        @Test
+        @DisplayName("The one where nothing is stored, so the local database is empty")
+        void nothingStoredIsEmpty() {
+            assertThat(adapter.isEmpty()).isTrue();
+        }
+
+        @Test
+        @DisplayName("The one where Bulbasaur is stored, so the local database is not empty")
+        void somethingStoredIsNotEmpty() {
+            entityManager.persistAndFlush(StoredPokemonEntity.from(new StoredPokemon(1, "bulbasaur", "Seed Pokémon",
+                    69, "bulbasaur.png", null, null, List.of())));
+
+            assertThat(adapter.isEmpty()).isFalse();
+        }
+    }
 }

@@ -23,4 +23,9 @@ public interface StoredPokemonRepositoryPort {
      * @return the given page of stored Pokémon, ordered by id, with how many are stored in all
      */
     StoredPokemonPage findPage(int page, int size);
+
+    /**
+     * @return whether no Pokémon at all is stored
+     */
+    boolean isEmpty();
 }

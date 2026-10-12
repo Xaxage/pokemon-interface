@@ -34,4 +34,9 @@ class StoredPokemonPersistenceAdapter implements StoredPokemonRepositoryPort {
         return new StoredPokemonPage(found.map(StoredPokemonEntity::toStoredPokemon).getContent(),
                 Math.toIntExact(found.getTotalElements()));
     }
+
+    @Override
+    public boolean isEmpty() {
+        return repository.count() == 0;
+    }
 }
