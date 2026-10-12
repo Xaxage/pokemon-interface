@@ -13,4 +13,9 @@ public interface PokeApiPort {
      * @return the Pokémon's details, or empty when PokeAPI has none for it
      */
     Optional<Pokemon> fetchPokemonDetails(int id);
+
+    /**
+     * @return the name of the newest version group (games) known to PokeAPI
+     */
+    String fetchNewestVersionGroup();
 }

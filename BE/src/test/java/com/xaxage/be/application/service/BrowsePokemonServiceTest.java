@@ -1,8 +1,10 @@
 package com.xaxage.be.application.service;
 
 import com.xaxage.be.application.port.out.PokeApiPort;
+import com.xaxage.be.domain.model.LearnMethod;
 import com.xaxage.be.domain.model.Pokemon;
 import com.xaxage.be.domain.model.PokemonPage;
+import com.xaxage.be.domain.model.Skill;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -61,13 +63,13 @@ class BrowsePokemonServiceTest {
             given(pokeApi.fetchPokemon(0, 20))
                     .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")), false, 1));
             given(pokeApi.fetchPokemonDetails(1))
-                    .willReturn(Optional.of(new Pokemon(1, "bulbasaur",
-                            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")));
+                    .willReturn(Optional.of(new Pokemon(1, "bulbasaur")
+                            .withSprite("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")));
 
             var page = new BrowsePokemonService(pokeApi).browse(0, 20);
 
-            assertThat(page).isEqualTo(new PokemonPage(List.of(new Pokemon(1, "bulbasaur",
-                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")), false, 1));
+            assertThat(page).isEqualTo(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")
+                    .withSprite("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")), false, 1));
         }
 
         @Test
@@ -80,7 +82,29 @@ class BrowsePokemonServiceTest {
 
             var page = new BrowsePokemonService(pokeApi).browse(0, 20);
 
-            assertThat(page).isEqualTo(new PokemonPage(List.of(new Pokemon(2, "ivysaur", null)), false, 1));
+            assertThat(page).isEqualTo(new PokemonPage(List.of(new Pokemon(2, "ivysaur")), false, 1));
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show each Pokémon's skills (its moves) and how each is learned, in the newest version group known to PokeAPI")
+    class ShowsSkillsInTheNewestVersionGroup {
+
+        @Test
+        @DisplayName("The one where Scarlet/Violet is the newest version group, so Bulbasaur's Red/Blue-only Cut is left out")
+        void keepsOnlySkillsLearnableInTheNewestVersionGroup() {
+            var pokeApi = mock(PokeApiPort.class);
+            given(pokeApi.fetchPokemon(0, 20))
+                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")), false, 1));
+            given(pokeApi.fetchNewestVersionGroup()).willReturn("scarlet-violet");
+            given(pokeApi.fetchPokemonDetails(1)).willReturn(Optional.of(new Pokemon(1, "bulbasaur").withSkills(List.of(
+                    new Skill("tackle", List.of(new LearnMethod("level-up", 1, "scarlet-violet"))),
+                    new Skill("cut", List.of(new LearnMethod("machine", null, "red-blue")))))));
+
+            var page = new BrowsePokemonService(pokeApi).browse(0, 20);
+
+            assertThat(page.content()).extracting(Pokemon::skills).containsExactly(List.of(
+                    new Skill("tackle", List.of(new LearnMethod("level-up", 1, "scarlet-violet")))));
         }
     }
 }

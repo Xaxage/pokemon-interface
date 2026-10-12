@@ -17,8 +17,10 @@ public class BrowsePokemonService implements BrowsePokemonUseCase {
     @Override
     public PokemonPage browse(int page, int size) {
         var listed = pokeApi.fetchPokemon(page * size, size);
+        var newestVersionGroup = pokeApi.fetchNewestVersionGroup();
         var detailed = listed.content().stream()
                 .map(pokemon -> pokeApi.fetchPokemonDetails(pokemon.id()).orElse(pokemon))
+                .map(pokemon -> pokemon.learnableIn(newestVersionGroup))
                 .toList();
         return new PokemonPage(detailed, listed.hasNext(), listed.count());
     }
