@@ -5,6 +5,7 @@ import com.xaxage.be.application.port.out.StoredPokemonRepositoryPort;
 import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import com.xaxage.be.domain.model.Pokemon;
 import com.xaxage.be.domain.model.StoredPokemon;
+import com.xaxage.be.domain.model.Synchronisation;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -39,7 +40,7 @@ class SynchronisePokemonServiceTest {
 
             var expected = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png", null, null, List.of());
             then(storedPokemon).should().save(expected);
-            assertThat(synchronised).isEqualTo(expected);
+            assertThat(synchronised).isEqualTo(new Synchronisation.Copied(expected));
         }
 
         @Test
@@ -55,6 +56,31 @@ class SynchronisePokemonServiceTest {
                     .isInstanceOf(PokemonNotFoundException.class)
                     .hasMessage("No Pokémon has the id 99999");
             then(storedPokemon).shouldHaveNoInteractions();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must refresh PokeAPI's fields when a stored Pokémon is synchronised again, keeping our own fields")
+    class RefreshesPokeApisFieldsKeepingOurOwn {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is already stored as \"Bisasam\" from \"Kanto\", so its PokeAPI fields are "
+                + "refreshed, \"Bisasam\" and \"Kanto\" are kept, and it is reported as refreshed")
+        void storedPokemonIsRefreshedKeepingOurOwnFields() {
+            var pokeApi = mock(PokeApiPort.class);
+            var storedPokemon = mock(StoredPokemonRepositoryPort.class);
+            given(storedPokemon.findById(1)).willReturn(Optional.of(new StoredPokemon(1, "bulbasaur", "Seed Pokémon",
+                    60, "outdated-bulbasaur.png", "Bisasam", "Kanto", List.of())));
+            given(pokeApi.fetchPokemonDetails(1)).willReturn(Optional.of(new Pokemon(1, "bulbasaur")
+                    .withCategory("Seed Pokémon").withWeight(69).withSprite("bulbasaur.png")));
+            given(storedPokemon.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+            var synchronised = new SynchronisePokemonService(pokeApi, storedPokemon).synchronise(1);
+
+            var expected = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    "Bisasam", "Kanto", List.of());
+            then(storedPokemon).should().save(expected);
+            assertThat(synchronised).isEqualTo(new Synchronisation.Refreshed(expected));
         }
     }
 }

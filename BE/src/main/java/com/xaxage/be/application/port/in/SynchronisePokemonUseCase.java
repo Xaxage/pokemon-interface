@@ -1,13 +1,11 @@
 package com.xaxage.be.application.port.in;
 
-import com.xaxage.be.domain.model.StoredPokemon;
+import com.xaxage.be.domain.model.Synchronisation;
 
 public interface SynchronisePokemonUseCase {
 
     /**
-     * Copies the Pokémon with the id from PokeAPI into the local database.
-     *
-     * @return the local copy
+     * Copies the Pokémon with the id from PokeAPI into the local database, or refreshes the copy already there.
      */
-    StoredPokemon synchronise(int id);
+    Synchronisation synchronise(int id);
 }

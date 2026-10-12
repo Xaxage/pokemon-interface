@@ -111,6 +111,33 @@ class DataSynchronizationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must refresh PokeAPI's fields when a stored Pokémon is synchronised again, keeping our own fields")
+    class RefreshesPokeApisFieldsKeepingOurOwn {
+
+        @Test
+        @DisplayName("The one where Bulbasaur already has localized name \"Bisasam\" and region \"Kanto\"; synchronising "
+                + "it again updates the PokeAPI fields and keeps \"Bisasam\" and \"Kanto\" (200)")
+        void resynchronisingBulbasaurUpdatesPokeApisFieldsAndKeepsOurOwn() {
+            database.sql("""
+                            INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
+                            VALUES (1, 'bulbasaur', 'Seed Pokémon', 60, 'outdated-bulbasaur.png', 'Bisasam', 'Kanto')""")
+                    .update();
+            pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
+
+            var response = mvc.post().uri("/api/stored-pokemon/{id}/sync", 1).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
+            assertThat(response).bodyJson().extractingPath("$.name").isEqualTo("bulbasaur");
+            assertThat(response).bodyJson().extractingPath("$.category").isEqualTo("Seed Pokémon");
+            assertThat(response).bodyJson().extractingPath("$.weight").isEqualTo(69);
+            assertThat(response).bodyJson().extractingPath("$.sprite").isEqualTo(BULBASAUR_SPRITE);
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(response).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
+        }
+    }
+
     private static StubPokemon pokemon(int id, String name, String category, int weight, String sprite) {
         return new StubPokemon(id, name, category, weight, sprite);
     }

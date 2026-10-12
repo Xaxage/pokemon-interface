@@ -22,4 +22,12 @@ public record StoredPokemon(int id, String name, String category, Integer weight
         return new StoredPokemon(fromPokeApi.id(), fromPokeApi.name(), fromPokeApi.category(), fromPokeApi.weight(),
                 fromPokeApi.sprite(), null, null, List.of());
     }
+
+    /**
+     * @return this copy with PokeAPI's fields replaced by the ones PokeAPI gives now, and our own fields kept
+     */
+    public StoredPokemon refreshedFrom(Pokemon fromPokeApi) {
+        return new StoredPokemon(id, fromPokeApi.name(), fromPokeApi.category(), fromPokeApi.weight(),
+                fromPokeApi.sprite(), localizedName, region, tags);
+    }
 }

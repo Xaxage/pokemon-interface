@@ -5,6 +5,7 @@ import com.xaxage.be.application.port.out.PokeApiPort;
 import com.xaxage.be.application.port.out.StoredPokemonRepositoryPort;
 import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import com.xaxage.be.domain.model.StoredPokemon;
+import com.xaxage.be.domain.model.Synchronisation;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,8 +20,12 @@ public class SynchronisePokemonService implements SynchronisePokemonUseCase {
     }
 
     @Override
-    public StoredPokemon synchronise(int id) {
+    public Synchronisation synchronise(int id) {
         var fromPokeApi = pokeApi.fetchPokemonDetails(id).orElseThrow(() -> new PokemonNotFoundException(id));
-        return storedPokemon.save(StoredPokemon.copyOf(fromPokeApi));
+        var alreadyStored = storedPokemon.findById(id);
+        if (alreadyStored.isPresent()) {
+            return new Synchronisation.Refreshed(storedPokemon.save(alreadyStored.get().refreshedFrom(fromPokeApi)));
+        }
+        return new Synchronisation.Copied(storedPokemon.save(StoredPokemon.copyOf(fromPokeApi)));
     }
 }

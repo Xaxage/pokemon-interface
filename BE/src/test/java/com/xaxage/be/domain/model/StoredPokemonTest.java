@@ -32,4 +32,26 @@ class StoredPokemonTest {
                     null, null, List.of()));
         }
     }
+
+    @Nested
+    @DisplayName("Must refresh PokeAPI's fields when a stored Pokémon is synchronised again, keeping our own fields")
+    class RefreshesPokeApisFieldsKeepingOurOwn {
+
+        @Test
+        @DisplayName("The one where stored Bulbasaur is \"Bisasam\" from \"Kanto\" with tag \"starter\", so refreshing it "
+                + "takes PokeAPI's new weight and sprite and keeps \"Bisasam\", \"Kanto\" and \"starter\"")
+        void refreshTakesPokeApisFieldsAndKeepsOurOwn() {
+            var stored = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 60, "outdated-bulbasaur.png",
+                    "Bisasam", "Kanto", List.of("starter"));
+            var fromPokeApi = new Pokemon(1, "bulbasaur")
+                    .withCategory("Seed Pokémon")
+                    .withWeight(69)
+                    .withSprite("bulbasaur.png");
+
+            var refreshed = stored.refreshedFrom(fromPokeApi);
+
+            assertThat(refreshed).isEqualTo(new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    "Bisasam", "Kanto", List.of("starter")));
+        }
+    }
 }
