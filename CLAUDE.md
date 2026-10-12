@@ -27,7 +27,7 @@ Run a single test class or method:
 ## Stack
 
 - Java 21, Spring Boot 4.1.1 (Spring MVC, Spring Data JPA, Bean Validation, Spring Security).
-- MariaDB for the datastore; H2 for the test DB.
+- MariaDB for the datastore; In-memory for the test DB.
 - Spring `RestClient` for outbound PokeAPI calls.
 - Caffeine (Spring Cache abstraction) for caching PokeAPI responses.
 - JWT for stateless authentication (protected vs. public routes).
