@@ -43,7 +43,7 @@ class PokeApiClientTest {
             var page = new PokeApiClient(builder.build()).fetchPokemon(20, 2);
 
             assertThat(page).isEqualTo(new PokemonPage(
-                    List.of(new Pokemon(21, "spearow"), new Pokemon(22, "fearow")), true));
+                    List.of(new Pokemon(21, "spearow"), new Pokemon(22, "fearow")), true, 1350));
             pokeApi.verify();
         }
 
@@ -68,7 +68,30 @@ class PokeApiClientTest {
             var page = new PokeApiClient(builder.build()).fetchPokemon(1348, 20);
 
             assertThat(page).isEqualTo(new PokemonPage(
-                    List.of(new Pokemon(10324, "pikachu-world-cap"), new Pokemon(10325, "pikachu-gmax")), false));
+                    List.of(new Pokemon(10324, "pikachu-world-cap"), new Pokemon(10325, "pikachu-gmax")), false, 1350));
+            pokeApi.verify();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI reports 1350 Pokémon in total, so the page carries that total")
+        void carriesTheTotalReportedByPokeApi() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/?offset=0&limit=1"))
+                    .andRespond(withSuccess("""
+                            {
+                              "count": 1350,
+                              "next": "https://pokeapi.test/api/v2/pokemon/?offset=1&limit=1",
+                              "previous": null,
+                              "results": [
+                                {"name": "bulbasaur", "url": "https://pokeapi.test/api/v2/pokemon/1/"}
+                              ]
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var page = new PokeApiClient(builder.build()).fetchPokemon(0, 1);
+
+            assertThat(page.count()).isEqualTo(1350);
             pokeApi.verify();
         }
     }

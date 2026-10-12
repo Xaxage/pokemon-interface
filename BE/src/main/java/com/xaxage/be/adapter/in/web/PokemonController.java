@@ -20,6 +20,6 @@ class PokemonController {
     @GetMapping
     PokemonPageResponse browse(@RequestParam(defaultValue = "0") int page,
                                @RequestParam(defaultValue = "20") int size) {
-        return PokemonPageResponse.from(browsePokemon.browse(page, size));
+        return PokemonPageResponse.from(browsePokemon.browse(page, size), page, size);
     }
 }

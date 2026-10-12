@@ -34,7 +34,7 @@ class PokemonControllerTest {
         @DisplayName("The one where no page or size is given, so page 0 of 20 is asked for and returned as-is")
         void defaultsToFirstPageOfTwenty() {
             given(browsePokemon.browse(0, 20))
-                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")), true));
+                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")), true, 1350));
 
             var response = mvc.get().uri("/api/pokemon").exchange();
 
@@ -48,13 +48,33 @@ class PokemonControllerTest {
         @DisplayName("The one where a page past the last page comes back with an empty list of entries and no next page")
         void pagePastTheLastHasEmptyContent() {
             given(browsePokemon.browse(2, 20))
-                    .willReturn(new PokemonPage(List.of(), false));
+                    .willReturn(new PokemonPage(List.of(), false, 1350));
 
             var response = mvc.get().uri("/api/pokemon").param("page", "2").param("size", "20").exchange();
 
             assertThat(response).hasStatusOk();
             assertThat(response).bodyJson().extractingPath("$.content").asArray().isEmpty();
             assertThat(response).bodyJson().extractingPath("$.hasNext").isEqualTo(false);
+        }
+    }
+
+    @Nested
+    @DisplayName("Must tell the reader where they are in the full list")
+    class WhereTheReaderIsInTheFullList {
+
+        @Test
+        @DisplayName("The one where page 1 of size 20 out of 45 Pokémon reports page 1, size 20, a count of 45 and 3 pages")
+        void reportsPagePositionAndTotals() {
+            given(browsePokemon.browse(1, 20))
+                    .willReturn(new PokemonPage(List.of(new Pokemon(21, "spearow")), true, 45));
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "1").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.page").isEqualTo(1);
+            assertThat(response).bodyJson().extractingPath("$.size").isEqualTo(20);
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(45);
+            assertThat(response).bodyJson().extractingPath("$.totalPages").isEqualTo(3);
         }
     }
 }

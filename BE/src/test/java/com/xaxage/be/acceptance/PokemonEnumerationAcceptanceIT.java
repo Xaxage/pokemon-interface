@@ -177,6 +177,43 @@ class PokemonEnumerationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must tell the reader where they are in the full list")
+    class TellsTheReaderWhereTheyAreInTheFullList {
+
+        @Test
+        @DisplayName("The one where page 0 of size 20 reports page 0, size 20, the total number of Pokémon as reported by PokeAPI, and the total number of pages")
+        void firstPageReportsItsPositionAndTheTotals() {
+            pokeApi.serves(filler(1, 45));
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "0").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.page").isEqualTo(0);
+            assertThat(response).bodyJson().extractingPath("$.size").isEqualTo(20);
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(45);
+            assertThat(response).bodyJson().extractingPath("$.totalPages").isEqualTo(3);
+        }
+
+        @Test
+        @DisplayName("The one where a page past the end comes back empty but still reports the real total and total pages")
+        void pagePastTheEndStillReportsTheRealTotals() {
+            var catalogue = new ArrayList<StubPokemon>(filler(1, 30));
+            catalogue.addAll(List.of(
+                    form(10001, "deoxys-attack", 386),
+                    form(10002, "deoxys-defense", 386),
+                    form(10033, "venusaur-mega", 3)));
+            pokeApi.serves(catalogue);
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "2").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content").asArray().isEmpty();
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(33);
+            assertThat(response).bodyJson().extractingPath("$.totalPages").isEqualTo(2);
+        }
+    }
+
     private static StubPokemon pokemon(int id, String name) {
         return new StubPokemon(id, name, id);
     }
