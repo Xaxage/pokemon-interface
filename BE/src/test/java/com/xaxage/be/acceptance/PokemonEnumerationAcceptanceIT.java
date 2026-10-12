@@ -214,12 +214,66 @@ class PokemonEnumerationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must show each Pokémon's default front sprite")
+    class ShowsEachPokemonsDefaultFrontSprite {
+
+        @Test
+        @DisplayName("The one where Bulbasaur comes back with the link to its default front battle sprite")
+        void bulbasaurComesBackWithItsDefaultFrontSprite() {
+            pokeApi.serves(List.of(
+                    pokemon(1, "bulbasaur")
+                            .withSprite("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")));
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "0").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[0].name").isEqualTo("bulbasaur");
+            assertThat(response).bodyJson().extractingPath("$.content[0].sprite")
+                    .isEqualTo("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png");
+        }
+
+        @Test
+        @DisplayName("The one where an alternate form has no default front sprite. It is still listed, with an empty sprite")
+        void alternateFormWithoutDefaultFrontSpriteIsStillListed() {
+            pokeApi.serves(List.of(
+                    pokemon(1, "bulbasaur")
+                            .withSprite("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png"),
+                    form(10264, "koraidon-limited-build", 1007)));
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "0").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].id").asArray().containsExactly(1, 10264);
+            assertThat(response).bodyJson().extractingPath("$.content[1].name").isEqualTo("koraidon-limited-build");
+            assertThat(response).bodyJson().hasPath("$.content[1].sprite");
+            assertThat(response).bodyJson().extractingPath("$.content[1].sprite").isNull();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI has no details for a listed Pokémon. It is still listed, with only its name and an empty sprite")
+        void listedPokemonWithoutDetailsIsStillListedWithOnlyItsName() {
+            pokeApi.serves(List.of(
+                    pokemon(1, "bulbasaur")
+                            .withSprite("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png"),
+                    pokemon(2, "ivysaur").withoutDetails()));
+
+            var response = mvc.get().uri("/api/pokemon").param("page", "0").param("size", "20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].id").asArray().containsExactly(1, 2);
+            assertThat(response).bodyJson().extractingPath("$.content[1].name").isEqualTo("ivysaur");
+            assertThat(response).bodyJson().hasPath("$.content[1].sprite");
+            assertThat(response).bodyJson().extractingPath("$.content[1].sprite").isNull();
+        }
+    }
+
     private static StubPokemon pokemon(int id, String name) {
-        return new StubPokemon(id, name, id);
+        return new StubPokemon(id, name, id, null, true);
     }
 
     private static StubPokemon form(int id, String name, int speciesId) {
-        return new StubPokemon(id, name, speciesId);
+        return new StubPokemon(id, name, speciesId, null, true);
     }
 
     /**
@@ -229,7 +283,19 @@ class PokemonEnumerationAcceptanceIT {
         return IntStream.rangeClosed(fromId, toId).mapToObj(id -> pokemon(id, "pokemon-" + id)).toList();
     }
 
-    private record StubPokemon(int id, String name, int speciesId) {
+    /**
+     * @param sprite     the default front sprite URL, or {@code null} when PokeAPI has none
+     * @param hasDetails {@code false} when PokeAPI lists the Pokémon but answers 404 for {@code /pokemon/{id}}
+     */
+    private record StubPokemon(int id, String name, int speciesId, String sprite, boolean hasDetails) {
+
+        StubPokemon withSprite(String spriteUrl) {
+            return new StubPokemon(id, name, speciesId, spriteUrl, hasDetails);
+        }
+
+        StubPokemon withoutDetails() {
+            return new StubPokemon(id, name, speciesId, sprite, false);
+        }
     }
 
     /**
@@ -268,6 +334,7 @@ class PokemonEnumerationAcceptanceIT {
             }
             var found = catalogue.get().stream()
                     .filter(p -> key.equals(String.valueOf(p.id())) || key.equals(p.name()))
+                    .filter(StubPokemon::hasDetails)
                     .findFirst();
             if (found.isEmpty()) {
                 respond(exchange, 404, "Not Found");
@@ -275,9 +342,10 @@ class PokemonEnumerationAcceptanceIT {
             }
             var p = found.get();
             respond(exchange, 200, """
-                    {"id":%d,"name":"%s","weight":0,"sprites":{"front_default":null},\
+                    {"id":%d,"name":"%s","weight":0,"sprites":{"front_default":%s},\
                     "species":{"name":"%s","url":"%s/pokemon-species/%d/"},"moves":[]}"""
-                    .formatted(p.id(), p.name(), p.name(), baseUrl(), p.speciesId()));
+                    .formatted(p.id(), p.name(), p.sprite() == null ? "null" : "\"" + p.sprite() + "\"",
+                            p.name(), baseUrl(), p.speciesId()));
         }
 
         private void list(HttpExchange exchange) throws IOException {

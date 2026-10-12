@@ -28,6 +28,8 @@ live from PokeAPI and is cached in memory.
     - Example: The one where Bulbasaur comes back with the link to its default front battle sprite.
     - Counter-example: The one where an alternate form has no default front sprite. It is still listed, with an empty
       sprite.
+  - Counter-example: The one where PokeAPI has no details for a listed Pokémon. It is still listed, with only its
+    name and an empty sprite.
 
 - **Rule: Must show each Pokémon's category as its English species genus**
     - Example: The one where Bulbasaur's category is "Seed Pokémon".

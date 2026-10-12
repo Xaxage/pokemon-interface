@@ -77,4 +77,23 @@ class PokemonControllerTest {
             assertThat(response).bodyJson().extractingPath("$.totalPages").isEqualTo(3);
         }
     }
+
+    @Nested
+    @DisplayName("Must show each Pokémon's default front sprite")
+    class ShowsEachPokemonsDefaultFrontSprite {
+
+        @Test
+        @DisplayName("The one where Bulbasaur comes back with the link to its default front battle sprite")
+        void showsTheSpriteLink() {
+            given(browsePokemon.browse(0, 20))
+                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur",
+                            "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png")), false, 1));
+
+            var response = mvc.get().uri("/api/pokemon").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[0].sprite")
+                    .isEqualTo("https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png");
+        }
+    }
 }

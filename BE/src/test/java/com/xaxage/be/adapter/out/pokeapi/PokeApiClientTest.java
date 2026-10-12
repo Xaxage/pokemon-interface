@@ -5,6 +5,7 @@ import com.xaxage.be.domain.model.PokemonPage;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
@@ -13,6 +14,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 @DisplayName("PokeAPI client")
@@ -92,6 +94,70 @@ class PokeApiClientTest {
             var page = new PokeApiClient(builder.build()).fetchPokemon(0, 1);
 
             assertThat(page.count()).isEqualTo(1350);
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show each Pokémon's default front sprite")
+    class FetchingTheDefaultFrontSprite {
+
+        @Test
+        @DisplayName("The one where PokeAPI gives Bulbasaur a default front sprite, so its link comes back with Bulbasaur")
+        void readsTheDefaultFrontSprite() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 1,
+                              "name": "bulbasaur",
+                              "weight": 69,
+                              "sprites": {
+                                "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png",
+                                "front_shiny": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/shiny/1.png"
+                              }
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchPokemonDetails(1);
+
+            assertThat(pokemon).contains(new Pokemon(1, "bulbasaur",
+                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png"));
+            pokeApi.verify();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI gives an alternate form no sprites at all, so it still comes back, with an empty sprite")
+        void formWithoutAnySpritesComesBackWithAnEmptySprite() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/10264/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 10264,
+                              "name": "koraidon-limited-build",
+                              "weight": 3030
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchPokemonDetails(10264);
+
+            assertThat(pokemon).contains(new Pokemon(10264, "koraidon-limited-build", null));
+            pokeApi.verify();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI has no details for a listed Pokémon, so no details come back instead of an error")
+        void missingDetailsComeBackEmpty() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/2/"))
+                    .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchPokemonDetails(2);
+
+            assertThat(pokemon).isEmpty();
             pokeApi.verify();
         }
     }
