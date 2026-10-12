@@ -2,6 +2,8 @@ package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.in.BrowseStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.SynchronisePokemonUseCase;
+import com.xaxage.be.application.port.in.ViewStoredPokemonUseCase;
+import com.xaxage.be.domain.exception.PokemonNotStoredException;
 import com.xaxage.be.domain.model.StoredPokemon;
 import com.xaxage.be.domain.model.StoredPokemonPage;
 import com.xaxage.be.domain.model.Synchronisation;
@@ -35,6 +37,9 @@ class StoredPokemonControllerTest {
 
     @MockitoBean
     private BrowseStoredPokemonUseCase browseStoredPokemon;
+
+    @MockitoBean
+    private ViewStoredPokemonUseCase viewStoredPokemon;
 
     @Nested
     @DisplayName("Must copy a Pokémon from PokeAPI into the local database, with our own fields empty")
@@ -119,6 +124,40 @@ class StoredPokemonControllerTest {
             assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
             assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(400);
             then(browseStoredPokemon).shouldHaveNoInteractions();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show one stored Pokémon by its id")
+    class ShowsOneStoredPokemonByItsId {
+
+        @Test
+        @DisplayName("The one where stored Bulbasaur is asked for, so it comes back with PokeAPI's fields and our own")
+        void answersTheStoredPokemon() {
+            given(viewStoredPokemon.view(1)).willReturn(new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69,
+                    "bulbasaur.png", "Bisasam", "Kanto", List.of("starter", "grass")));
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.name").isEqualTo("bulbasaur");
+            assertThat(response).bodyJson().extractingPath("$.weight").isEqualTo(69);
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(response).bodyJson().extractingPath("$.tags").asArray().containsExactly("starter", "grass");
+        }
+
+        @Test
+        @DisplayName("The one where id 25 is not stored, so the reader gets a 404 with the standard error body")
+        void pokemonNotStoredAnswers404() {
+            given(viewStoredPokemon.view(25)).willThrow(new PokemonNotStoredException(25));
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 25).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
+            assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
+            assertThat(response).bodyJson().extractingPath("$.detail").isEqualTo("No Pokémon with the id 25 is stored");
         }
     }
 }

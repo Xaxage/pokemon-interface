@@ -4,6 +4,7 @@ import com.xaxage.be.adapter.in.web.dto.StoredPokemonPageResponse;
 import com.xaxage.be.adapter.in.web.dto.StoredPokemonResponse;
 import com.xaxage.be.application.port.in.BrowseStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.SynchronisePokemonUseCase;
+import com.xaxage.be.application.port.in.ViewStoredPokemonUseCase;
 import com.xaxage.be.domain.model.Synchronisation;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -19,11 +20,14 @@ class StoredPokemonController {
 
     private final SynchronisePokemonUseCase synchronisePokemon;
     private final BrowseStoredPokemonUseCase browseStoredPokemon;
+    private final ViewStoredPokemonUseCase viewStoredPokemon;
 
     StoredPokemonController(SynchronisePokemonUseCase synchronisePokemon,
-                            BrowseStoredPokemonUseCase browseStoredPokemon) {
+                            BrowseStoredPokemonUseCase browseStoredPokemon,
+                            ViewStoredPokemonUseCase viewStoredPokemon) {
         this.synchronisePokemon = synchronisePokemon;
         this.browseStoredPokemon = browseStoredPokemon;
+        this.viewStoredPokemon = viewStoredPokemon;
     }
 
     @PostMapping("/{id}/sync")
@@ -40,5 +44,10 @@ class StoredPokemonController {
     StoredPokemonPageResponse browse(@RequestParam(defaultValue = "0") @Min(0) int page,
                                      @RequestParam(defaultValue = "20") @Min(1) @Max(MAX_PAGE_SIZE) int size) {
         return StoredPokemonPageResponse.from(browseStoredPokemon.browse(page, size), page, size);
+    }
+
+    @GetMapping("/{id}")
+    StoredPokemonResponse view(@PathVariable int id) {
+        return StoredPokemonResponse.from(viewStoredPokemon.view(id));
     }
 }

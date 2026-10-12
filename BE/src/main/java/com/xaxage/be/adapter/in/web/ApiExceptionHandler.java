@@ -2,6 +2,7 @@ package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
 import com.xaxage.be.domain.exception.PokemonNotFoundException;
+import com.xaxage.be.domain.exception.PokemonNotStoredException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,5 +28,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PokemonNotFoundException.class)
     ProblemDetail pokemonNotFound(PokemonNotFoundException notFound) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notFound.getMessage());
+    }
+
+    @ExceptionHandler(PokemonNotStoredException.class)
+    ProblemDetail pokemonNotStored(PokemonNotStoredException notStored) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notStored.getMessage());
     }
 }

@@ -170,6 +170,51 @@ class DataSynchronizationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must show one stored Pokémon by its id")
+    class ShowsOneStoredPokemonByItsId {
+
+        @Test
+        @DisplayName("The one where stored Bulbasaur is returned with both PokeAPI's fields and our own")
+        void storedBulbasaurIsReturnedWithPokeApisFieldsAndOurOwn() {
+            database.sql("""
+                            INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
+                            VALUES (1, 'bulbasaur', 'Seed Pokémon', 69, ?, 'Bisasam', 'Kanto')""")
+                    .params(BULBASAUR_SPRITE)
+                    .update();
+            database.sql("""
+                            INSERT INTO stored_pokemon_tag (pokemon_id, position, tag)
+                            VALUES (1, 0, 'starter'), (1, 1, 'grass')""")
+                    .update();
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
+            assertThat(response).bodyJson().extractingPath("$.name").isEqualTo("bulbasaur");
+            assertThat(response).bodyJson().extractingPath("$.category").isEqualTo("Seed Pokémon");
+            assertThat(response).bodyJson().extractingPath("$.weight").isEqualTo(69);
+            assertThat(response).bodyJson().extractingPath("$.sprite").isEqualTo(BULBASAUR_SPRITE);
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(response).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
+            assertThat(response).bodyJson().extractingPath("$.tags").asArray().containsExactly("starter", "grass");
+        }
+
+        @Test
+        @DisplayName("The one where the id is not stored locally, so the reader gets a 404 with the standard error body, "
+                + "even if PokeAPI knows the Pokémon")
+        void pokemonNotStoredLocallyIsNotFoundEvenIfPokeApiKnowsIt() {
+            pokeApi.serves(List.of(pokemon(1, "bulbasaur", "Seed Pokémon", 69, BULBASAUR_SPRITE)));
+
+            var response = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
+            assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
+        }
+    }
+
     private void stores(int id, String name, String category, int weight) {
         database.sql("""
                         INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
