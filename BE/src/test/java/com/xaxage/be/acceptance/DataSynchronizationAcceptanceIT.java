@@ -138,6 +138,46 @@ class DataSynchronizationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must list stored Pokémon one page at a time, ordered by id")
+    class ListsStoredPokemonOnePageAtATime {
+
+        @Test
+        @DisplayName("The one where 3 Pokémon are stored and page 0 of size 20 returns all 3, with the total and total pages")
+        void firstPageReturnsAllThreeStoredPokemonOrderedById() {
+            stores(7, "squirtle", "Tiny Turtle Pokémon", 90);
+            stores(1, "bulbasaur", "Seed Pokémon", 69);
+            stores(4, "charmander", "Lizard Pokémon", 85);
+
+            var response = mvc.get().uri("/api/stored-pokemon?page=0&size=20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content[*].id").asArray().containsExactly(1, 4, 7);
+            assertThat(response).bodyJson().extractingPath("$.content[*].name").asArray()
+                    .containsExactly("bulbasaur", "charmander", "squirtle");
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(3);
+            assertThat(response).bodyJson().extractingPath("$.totalPages").isEqualTo(1);
+        }
+
+        @Test
+        @DisplayName("The one where nothing is stored, so the page is empty with a total of 0")
+        void nothingStoredGivesAnEmptyPage() {
+            var response = mvc.get().uri("/api/stored-pokemon?page=0&size=20").exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.content").asArray().isEmpty();
+            assertThat(response).bodyJson().extractingPath("$.count").isEqualTo(0);
+        }
+    }
+
+    private void stores(int id, String name, String category, int weight) {
+        database.sql("""
+                        INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
+                        VALUES (?, ?, ?, ?, ?, NULL, NULL)""")
+                .params(id, name, category, weight, name + ".png")
+                .update();
+    }
+
     private static StubPokemon pokemon(int id, String name, String category, int weight, String sprite) {
         return new StubPokemon(id, name, category, weight, sprite);
     }

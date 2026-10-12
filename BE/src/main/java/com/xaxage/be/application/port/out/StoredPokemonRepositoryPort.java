@@ -1,6 +1,7 @@
 package com.xaxage.be.application.port.out;
 
 import com.xaxage.be.domain.model.StoredPokemon;
+import com.xaxage.be.domain.model.StoredPokemonPage;
 
 import java.util.Optional;
 
@@ -17,4 +18,9 @@ public interface StoredPokemonRepositoryPort {
      * @return the Pokémon as stored
      */
     StoredPokemon save(StoredPokemon pokemon);
+
+    /**
+     * @return the given page of stored Pokémon, ordered by id, with how many are stored in all
+     */
+    StoredPokemonPage findPage(int page, int size);
 }

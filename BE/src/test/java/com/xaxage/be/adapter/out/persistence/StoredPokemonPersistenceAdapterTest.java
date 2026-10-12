@@ -1,6 +1,7 @@
 package com.xaxage.be.adapter.out.persistence;
 
 import com.xaxage.be.domain.model.StoredPokemon;
+import com.xaxage.be.domain.model.StoredPokemonPage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -74,6 +75,30 @@ class StoredPokemonPersistenceAdapterTest {
         @DisplayName("The one where id 99999 is not stored, so nothing is found")
         void findsNothingForAnIdThatIsNotStored() {
             assertThat(adapter.findById(99999)).isEmpty();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must list stored Pokémon one page at a time, ordered by id")
+    class ListsStoredPokemonOnePageAtATime {
+
+        @Test
+        @DisplayName("The one where Squirtle, Bulbasaur and Charmander are stored in that order, so page 0 of size 2 is "
+                + "Bulbasaur then Charmander, out of 3")
+        void pageIsOrderedByIdWithTheTotal() {
+            var squirtle = new StoredPokemon(7, "squirtle", "Tiny Turtle Pokémon", 90, "squirtle.png",
+                    null, null, List.of());
+            var bulbasaur = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    null, null, List.of());
+            var charmander = new StoredPokemon(4, "charmander", "Lizard Pokémon", 85, "charmander.png",
+                    null, null, List.of());
+            entityManager.persist(StoredPokemonEntity.from(squirtle));
+            entityManager.persist(StoredPokemonEntity.from(bulbasaur));
+            entityManager.persist(StoredPokemonEntity.from(charmander));
+            entityManager.flush();
+            entityManager.clear();
+
+            assertThat(adapter.findPage(0, 2)).isEqualTo(new StoredPokemonPage(List.of(bulbasaur, charmander), 3));
         }
     }
 }
