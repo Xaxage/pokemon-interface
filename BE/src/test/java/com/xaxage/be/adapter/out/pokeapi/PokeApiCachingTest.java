@@ -117,6 +117,37 @@ class PokeApiCachingTest {
         }
     }
 
+    @Nested
+    @DisplayName("Should reuse PokeAPI responses for 24 hours and keep serving them while PokeAPI is unavailable")
+    class ReusesTheDetailedViewFor24Hours {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is viewed twice, so PokeAPI's Pokémon, species and evolution chain are fetched only once")
+        void reusesTheDetailedPokemon() {
+            server.expect(ExpectedCount.once(), requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {"id": 1, "name": "bulbasaur",
+                             "species": {"name": "bulbasaur", "url": "https://pokeapi.test/api/v2/pokemon-species/1/"}}
+                            """, MediaType.APPLICATION_JSON));
+            server.expect(ExpectedCount.once(), requestTo("https://pokeapi.test/api/v2/pokemon-species/1/"))
+                    .andRespond(withSuccess("""
+                            {"flavor_text_entries": [],
+                             "evolution_chain": {"url": "https://pokeapi.test/api/v2/evolution-chain/1/"}}
+                            """, MediaType.APPLICATION_JSON));
+            server.expect(ExpectedCount.once(), requestTo("https://pokeapi.test/api/v2/evolution-chain/1/"))
+                    .andRespond(withSuccess("""
+                            {"chain": {"species": {"name": "bulbasaur", "url": "https://pokeapi.test/api/v2/pokemon-species/1/"},
+                                       "evolves_to": []}}
+                            """, MediaType.APPLICATION_JSON));
+
+            var first = pokeApi.fetchDetailedPokemon(1);
+            var second = pokeApi.fetchDetailedPokemon(1);
+
+            assertThat(second).isEqualTo(first);
+            server.verify();
+        }
+    }
+
     /**
      * The real client and its cache, talking to a mocked PokeAPI on a clock the test controls.
      */

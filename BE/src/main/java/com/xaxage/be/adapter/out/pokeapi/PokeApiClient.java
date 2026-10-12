@@ -3,6 +3,8 @@ package com.xaxage.be.adapter.out.pokeapi;
 import com.xaxage.be.adapter.out.pokeapi.dto.*;
 import com.xaxage.be.application.port.out.PokeApiPort;
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
+import com.xaxage.be.domain.model.DetailedPokemon;
+import com.xaxage.be.domain.model.EvolutionStage;
 import com.xaxage.be.domain.model.Pokemon;
 import com.xaxage.be.domain.model.PokemonPage;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -37,17 +39,8 @@ class PokeApiClient implements PokeApiPort {
     @Override
     @Cacheable(PokeApiCacheConfig.POKEMON_DETAILS)
     public Optional<Pokemon> fetchPokemonDetails(int id) {
-        return unlessUnavailable(() -> {
-            try {
-                var details = pokeApi.get()
-                        .uri("/pokemon/{id}/", id)
-                        .retrieve()
-                        .body(PokemonDetailResponse.class);
-                return Optional.of(details.toPokemon().withCategory(categoryOf(details.species())));
-            } catch (HttpClientErrorException.NotFound noDetails) {
-                return Optional.empty();
-            }
-        });
+        return unlessUnavailable(() -> pokemon(id)
+                .map(details -> details.toPokemon().withCategory(categoryOf(details.species()))));
     }
 
     /**
@@ -62,6 +55,51 @@ class PokeApiClient implements PokeApiPort {
         });
     }
 
+    @Override
+    @Cacheable(PokeApiCacheConfig.DETAILED_POKEMON)
+    public Optional<DetailedPokemon> fetchDetailedPokemon(int id) {
+        return unlessUnavailable(() -> pokemon(id)
+                .map(details -> withSpeciesDetails(details.toDetailedPokemon(), details.species())));
+    }
+
+    /**
+     * The description and the evolution chain belong to the Pokémon's species, not to the Pokémon itself.
+     */
+    private DetailedPokemon withSpeciesDetails(DetailedPokemon pokemon, NamedResource species) {
+        if (species == null) {
+            return pokemon;
+        }
+        var speciesDetails = species(species);
+        return pokemon
+                .withDescription(speciesDetails.newestEnglishFlavorText())
+                .withEvolutionChain(firstStageOf(speciesDetails.evolutionChain()));
+    }
+
+    private EvolutionStage firstStageOf(NamedResource evolutionChain) {
+        if (evolutionChain == null) {
+            return null;
+        }
+        return pokeApi.get()
+                .uri("/evolution-chain/{id}/", evolutionChain.id())
+                .retrieve()
+                .body(EvolutionChainResponse.class)
+                .toFirstStage();
+    }
+
+    /**
+     * @return PokeAPI's {@code /pokemon/{id}} resource, or empty when PokeAPI has no Pokémon with the id
+     */
+    private Optional<PokemonDetailResponse> pokemon(int id) {
+        try {
+            return Optional.of(pokeApi.get()
+                    .uri("/pokemon/{id}/", id)
+                    .retrieve()
+                    .body(PokemonDetailResponse.class));
+        } catch (HttpClientErrorException.NotFound noSuchPokemon) {
+            return Optional.empty();
+        }
+    }
+
     private VersionGroupListResponse versionGroups(int offset, int limit) {
         return pokeApi.get()
                 .uri("/version-group/?offset={offset}&limit={limit}", offset, limit)
@@ -73,11 +111,14 @@ class PokeApiClient implements PokeApiPort {
         if (species == null) {
             return null;
         }
+        return species(species).englishGenus();
+    }
+
+    private PokemonSpeciesResponse species(NamedResource species) {
         return pokeApi.get()
                 .uri("/pokemon-species/{id}/", species.id())
                 .retrieve()
-                .body(PokemonSpeciesResponse.class)
-                .englishGenus();
+                .body(PokemonSpeciesResponse.class);
     }
 
     /**

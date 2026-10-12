@@ -1,6 +1,7 @@
 package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
+import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -21,5 +22,10 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         logger.warn("PokeAPI is unavailable", unavailable);
         return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE,
                 "Pokémon data is temporarily unavailable. Please try again later.");
+    }
+
+    @ExceptionHandler(PokemonNotFoundException.class)
+    ProblemDetail pokemonNotFound(PokemonNotFoundException notFound) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notFound.getMessage());
     }
 }

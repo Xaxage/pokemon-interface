@@ -20,6 +20,7 @@ class PokeApiCacheConfig {
     static final String POKEMON_PAGES = "pokeapi-pokemon-pages";
     static final String POKEMON_DETAILS = "pokeapi-pokemon-details";
     static final String NEWEST_VERSION_GROUP = "pokeapi-newest-version-group";
+    static final String DETAILED_POKEMON = "pokeapi-detailed-pokemon";
 
     private static final Duration TIME_TO_LIVE = Duration.ofHours(24);
 

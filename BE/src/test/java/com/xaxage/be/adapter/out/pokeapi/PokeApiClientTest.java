@@ -1,10 +1,7 @@
 package com.xaxage.be.adapter.out.pokeapi;
 
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
-import com.xaxage.be.domain.model.LearnMethod;
-import com.xaxage.be.domain.model.Pokemon;
-import com.xaxage.be.domain.model.PokemonPage;
-import com.xaxage.be.domain.model.Skill;
+import com.xaxage.be.domain.model.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -324,6 +321,216 @@ class PokeApiClientTest {
     }
 
     @Nested
+    @DisplayName("Must show a chosen Pokémon by its id")
+    class FetchingADetailedPokemon {
+
+        @Test
+        @DisplayName("The one where PokeAPI has Bulbasaur under id 1, so Bulbasaur comes back with its id and name")
+        void readsThePokemonWithTheGivenId() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {"id": 1, "name": "bulbasaur", "weight": 69, "sprites": {"front_default": null}}
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(1);
+
+            assertThat(pokemon).contains(new DetailedPokemon(1, "bulbasaur"));
+            pokeApi.verify();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI has no Pokémon with id 99999, so nothing comes back instead of an error")
+        void unknownIdComesBackEmpty() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/99999/"))
+                    .andRespond(withStatus(HttpStatus.NOT_FOUND));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(99999);
+
+            assertThat(pokemon).isEmpty();
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show the Pokémon's official artwork as its image")
+    class FetchingTheImage {
+
+        @Test
+        @DisplayName("The one where PokeAPI gives Bulbasaur an official artwork and a default front sprite, so the artwork is its image")
+        void readsTheOfficialArtwork() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 1,
+                              "name": "bulbasaur",
+                              "sprites": {
+                                "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/1.png",
+                                "other": {
+                                  "dream_world": {"front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/dream-world/1.svg"},
+                                  "official-artwork": {
+                                    "front_default": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png",
+                                    "front_shiny": "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/shiny/1.png"
+                                  }
+                                }
+                              }
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(1);
+
+            assertThat(pokemon).map(DetailedPokemon::image).contains(
+                    "https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/other/official-artwork/1.png");
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show the six core stats with their base values")
+    class FetchingTheStats {
+
+        @Test
+        @DisplayName("The one where PokeAPI gives Bulbasaur base hp 45 and base speed 45, so both come back by name, in PokeAPI order")
+        void readsEachStatWithItsBaseValue() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 1,
+                              "name": "bulbasaur",
+                              "stats": [
+                                {"base_stat": 45, "effort": 0, "stat": {"name": "hp", "url": "https://pokeapi.test/api/v2/stat/1/"}},
+                                {"base_stat": 45, "effort": 0, "stat": {"name": "speed", "url": "https://pokeapi.test/api/v2/stat/6/"}}
+                              ]
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(1);
+
+            assertThat(pokemon).map(DetailedPokemon::stats).contains(List.of(
+                    new Stat("hp", 45), new Stat("speed", 45)));
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show an English description from the Pokémon's species, taken from the newest game that has one")
+    class FetchingTheDescription {
+
+        @Test
+        @DisplayName("The one where Bulbasaur's species is described in English in Red and Shield, and in Japanese in Shield, so the English Shield text comes back")
+        void readsTheEnglishFlavorTextOfTheNewestGame() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 1,
+                              "name": "bulbasaur",
+                              "species": {"name": "bulbasaur", "url": "https://pokeapi.test/api/v2/pokemon-species/1/"}
+                            }
+                            """, MediaType.APPLICATION_JSON));
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon-species/1/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 1,
+                              "flavor_text_entries": [
+                                {
+                                  "flavor_text": "A strange seed was\\nplanted on its\\nback at birth.\\fThe plant sprouts\\nand grows with\\nthis POKéMON.",
+                                  "language": {"name": "en", "url": "https://pokeapi.test/api/v2/language/9/"},
+                                  "version": {"name": "red", "url": "https://pokeapi.test/api/v2/version/1/"}
+                                },
+                                {
+                                  "flavor_text": "There is a plant seed on its back right from\\nthe day this Pokémon is born. The seed slowly\\ngrows larger.",
+                                  "language": {"name": "en", "url": "https://pokeapi.test/api/v2/language/9/"},
+                                  "version": {"name": "shield", "url": "https://pokeapi.test/api/v2/version/34/"}
+                                },
+                                {
+                                  "flavor_text": "うまれたときから　せなかに\\nしょくぶつの　タネが　あって\\nすこしずつ　おおきく　そだつ。",
+                                  "language": {"name": "ja", "url": "https://pokeapi.test/api/v2/language/11/"},
+                                  "version": {"name": "shield", "url": "https://pokeapi.test/api/v2/version/34/"}
+                                }
+                              ]
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(1);
+
+            assertThat(pokemon).map(DetailedPokemon::description).contains(
+                    "There is a plant seed on its back right from the day this Pokémon is born. The seed slowly grows larger.");
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must show the whole evolution chain, from the first stage to the last")
+    class FetchingTheEvolutionChain {
+
+        @Test
+        @DisplayName("The one where Eevee's species links to a chain branching into Vaporeon and Jolteon, so both come back as second stages")
+        void readsTheChainTheSpeciesLinksTo() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/133/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 133,
+                              "name": "eevee",
+                              "species": {"name": "eevee", "url": "https://pokeapi.test/api/v2/pokemon-species/133/"}
+                            }
+                            """, MediaType.APPLICATION_JSON));
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon-species/133/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 133,
+                              "flavor_text_entries": [],
+                              "evolution_chain": {"url": "https://pokeapi.test/api/v2/evolution-chain/67/"}
+                            }
+                            """, MediaType.APPLICATION_JSON));
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/evolution-chain/67/"))
+                    .andRespond(withSuccess("""
+                            {
+                              "id": 67,
+                              "baby_trigger_item": null,
+                              "chain": {
+                                "is_baby": false,
+                                "species": {"name": "eevee", "url": "https://pokeapi.test/api/v2/pokemon-species/133/"},
+                                "evolution_details": [],
+                                "evolves_to": [
+                                  {
+                                    "is_baby": false,
+                                    "species": {"name": "vaporeon", "url": "https://pokeapi.test/api/v2/pokemon-species/134/"},
+                                    "evolution_details": [{"item": {"name": "water-stone", "url": "https://pokeapi.test/api/v2/item/84/"}}],
+                                    "evolves_to": []
+                                  },
+                                  {
+                                    "is_baby": false,
+                                    "species": {"name": "jolteon", "url": "https://pokeapi.test/api/v2/pokemon-species/135/"},
+                                    "evolution_details": [{"item": {"name": "thunder-stone", "url": "https://pokeapi.test/api/v2/item/83/"}}],
+                                    "evolves_to": []
+                                  }
+                                ]
+                              }
+                            }
+                            """, MediaType.APPLICATION_JSON));
+
+            var pokemon = new PokeApiClient(builder.build()).fetchDetailedPokemon(133);
+
+            assertThat(pokemon).map(DetailedPokemon::evolutionChain).contains(
+                    new EvolutionStage("eevee", List.of(
+                            new EvolutionStage("vaporeon", List.of()),
+                            new EvolutionStage("jolteon", List.of()))));
+            pokeApi.verify();
+        }
+    }
+
+    @Nested
     @DisplayName("Must keep serving cached data while PokeAPI is unavailable, and otherwise fail clearly")
     class WhenPokeApiIsUnavailable {
 
@@ -366,6 +573,20 @@ class PokeApiClientTest {
             var client = new PokeApiClient(builder.build());
 
             assertThatThrownBy(client::fetchNewestVersionGroup).isInstanceOf(PokeApiUnavailableException.class);
+            pokeApi.verify();
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI answers 503 when Bulbasaur is viewed, so it is reported as unavailable, not as missing")
+        void detailedPokemonFromPokeApiThatIsDownIsReportedAsUnavailable() {
+            var builder = RestClient.builder().baseUrl("https://pokeapi.test/api/v2");
+            var pokeApi = MockRestServiceServer.bindTo(builder).build();
+            pokeApi.expect(requestTo("https://pokeapi.test/api/v2/pokemon/1/"))
+                    .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
+
+            var client = new PokeApiClient(builder.build());
+
+            assertThatThrownBy(() -> client.fetchDetailedPokemon(1)).isInstanceOf(PokeApiUnavailableException.class);
             pokeApi.verify();
         }
     }
