@@ -13,7 +13,47 @@ choose into a local database, and lets signed-in users add their own fields (loc
 
 ## Quick start
 
-### Prerequisites
+### Option A: everything in Docker (recommended)
+
+You only need Docker with Compose v2.
+
+```bash
+docker compose up --build -d
+```
+
+| Container | What it runs | URL |
+|---|---|---|
+| `pokemon-frontend` | nginx serving the React build and proxying `/api` to the backend | http://localhost:3000 |
+| `pokemon-backend` | Spring Boot jar on a Java 21 JRE | http://localhost:8080/api/pokemon |
+| `pokemon-mariadb` | MariaDB 11.4 (data kept in the `pokemon-db-data` volume) | `localhost:3306` |
+
+Open http://localhost:3000 and sign in with **`demo` / `demo1234`**, or click **Sign in as demo**. The backend
+waits for MariaDB to report healthy before it starts.
+
+```bash
+docker compose logs -f backend    # follow the backend log
+docker compose down               # stop (keeps the data)
+docker compose down -v            # stop and wipe the database; demo data is seeded again on next start
+```
+
+You can set these in your shell or in a `.env` file at the repository root:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `FRONTEND_PORT` | `3000` | Host port for the UI |
+| `BACKEND_PORT` | `8080` | Host port for the API (e.g. `8081` if a locally run backend already uses 8080) |
+| `JWT_SECRET` | dev-only value | HS256 signing key, at least 32 bytes |
+
+Each app also builds on its own:
+
+```bash
+docker build -t pokemon-interface-be BE
+docker build -t pokemon-interface-fe FE   # the BACKEND_URL env var sets where nginx proxies /api
+```
+
+### Option B: run locally for development
+
+#### Prerequisites
 
 | Tool | Version |
 |---|---|
@@ -21,27 +61,20 @@ choose into a local database, and lets signed-in users add their own fields (loc
 | Node.js | 18+ (tested with 22) |
 | Docker | any recent version (for MariaDB) |
 
-### 1. Start the database
+#### 1. Start the database
 
 ```bash
-docker compose up -d          # MariaDB 11.4 on localhost:3306, db/user/password: pokemon
+docker compose up -d mariadb  # MariaDB 11.4 on localhost:3306, db/user/password: pokemon
 ```
 
-### 2. Start the backend (port 8080)
+#### 2. Start the backend (port 8080)
 
 ```bash
 cd BE
 ./mvnw spring-boot:run        # Windows: mvnw.cmd spring-boot:run
 ```
 
-On first start the backend **seeds demo data**:
-
-- The first 10 Pokémon (Bulbasaur … Caterpie) in the local collection.
-- A demo user: **`demo` / `demo1234`**.
-
-Seeding is idempotent: it only runs when the collection is empty or the demo user is missing.
-
-### 3. Start the frontend (port 5173)
+#### 3. Start the frontend (port 5173)
 
 ```bash
 cd FE
@@ -50,6 +83,30 @@ npm run dev
 ```
 
 Open http://localhost:5173 and sign in with **`demo` / `demo1234`**, or click **Sign in as demo**.
+
+### Demonstration data
+
+On startup the backend fills in any missing demo data, so a fresh database is ready to use right away:
+
+- The first 10 Pokémon (Bulbasaur … Caterpie) in the local collection.
+- A demo user: **`demo` / `demo1234`**.
+
+Seeding is idempotent: it only runs when the collection is empty or the demo user is missing.
+
+### Trying the API: IntelliJ HTTP Client
+
+[`http/`](http) holds ready-made requests for every endpoint, including the error cases (400, 401, 404, 409):
+
+| File | Covers |
+|---|---|
+| [`auth.http`](http/auth.http) | Sign in as demo (stores the JWT), register, duplicate and invalid registrations |
+| [`pokemon.http`](http/pokemon.http) | Paginated list and detailed view from PokeAPI |
+| [`stored-pokemon.http`](http/stored-pokemon.http) | Collection: browse, view, sync, edit, delete |
+
+Open a file in IntelliJ IDEA and pick an environment from
+[`http-client.env.json`](http/http-client.env.json): **`local`** sends requests straight to the backend on :8080,
+and **`docker`** goes through nginx on :3000. Run the sign-in request first. It saves the JWT as `{{token}}`, which
+the protected requests use.
 
 ---
 
@@ -71,8 +128,14 @@ Open http://localhost:5173 and sign in with **`demo` / `demo1234`**, or click **
 | `BACKEND_URL` | `http://localhost:8080` | Where the Vite dev server proxies `/api/*` |
 
 The dev server proxies every `/api` request to the backend, so the browser sees a single origin and the backend
-needs no CORS configuration. For a production deployment, serve `FE/dist` (from `npm run build`) behind the same
-reverse proxy as the backend, routing `/api` to Spring Boot and every other path to `index.html`.
+needs no CORS configuration. The frontend Docker image works the same way: nginx serves `FE/dist`, routes `/api` to
+Spring Boot ([`FE/nginx.conf.template`](FE/nginx.conf.template)), and sends every other path to `index.html`.
+
+### Overriding backend settings
+
+Any backend property can be overridden with an environment variable (Spring relaxed binding). This is how
+`docker-compose.yaml` points the backend at the `mariadb` container. The variables are `SPRING_DATASOURCE_URL`,
+`SPRING_DATASOURCE_USERNAME`, `SPRING_DATASOURCE_PASSWORD`, `POKEAPI_BASE_URL` and `JWT_SECRET`.
 
 ---
 

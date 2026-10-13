@@ -1,0 +1,52 @@
+### US-05 · User authentication
+# Pick the "local" (backend on :8080) or "docker" (through the frontend's nginx on :3000) environment.
+
+### Sign in as the seeded demo user — stores the JWT for the protected requests in stored-pokemon.http
+POST {{baseUrl}}/api/auth/sign-in
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "demo1234"
+}
+
+> {%
+    client.test("Signed in", () => client.assert(response.status === 200, "Expected 200, got " + response.status));
+    client.global.set("token", response.body.token);
+%}
+
+### Register a new user (unique name per run) — 201
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "trainer{{$timestamp}}",
+  "password": "pikachu123"
+}
+
+### Register the demo username again — 409 username taken
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "whatever123"
+}
+
+### Register with a too-short username and password — 400 with invalidFields
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "ab",
+  "password": "short"
+}
+
+### Sign in with a wrong password — 401
+POST {{baseUrl}}/api/auth/sign-in
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "wrong-password"
+}

@@ -1,0 +1,19 @@
+### US-01 / US-02 · Pokémon live from PokeAPI (public)
+
+### First page, default size (20)
+GET {{baseUrl}}/api/pokemon
+
+### Second page of 5
+GET {{baseUrl}}/api/pokemon?page=1&size=5
+
+### Page size above the maximum (100) — 400
+GET {{baseUrl}}/api/pokemon?size=101
+
+### Detailed view: Eevee (branched evolution chain)
+GET {{baseUrl}}/api/pokemon/133
+
+### Detailed view: Pikachu
+GET {{baseUrl}}/api/pokemon/25
+
+### Unknown Pokémon — 404
+GET {{baseUrl}}/api/pokemon/999999

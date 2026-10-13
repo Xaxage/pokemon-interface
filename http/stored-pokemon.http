@@ -1,0 +1,55 @@
+### US-03 / US-04 · The local collection
+# Reads are public. Sync, edit and delete need a bearer token: run the first request (or auth.http) first.
+
+### Sign in as demo and keep the token
+POST {{baseUrl}}/api/auth/sign-in
+Content-Type: application/json
+
+{
+  "username": "demo",
+  "password": "demo1234"
+}
+
+> {% client.global.set("token", response.body.token); %}
+
+### Browse the collection (seeded with Bulbasaur … Caterpie)
+GET {{baseUrl}}/api/stored-pokemon?page=0&size=20
+
+### View one stored Pokémon
+GET {{baseUrl}}/api/stored-pokemon/1
+
+### Not in the collection — 404
+GET {{baseUrl}}/api/stored-pokemon/150
+
+### Copy Pikachu from PokeAPI into the collection — 201 the first time, 200 (refreshed) after that
+POST {{baseUrl}}/api/stored-pokemon/25/sync
+Authorization: Bearer {{token}}
+
+### Sync without signing in — 401
+POST {{baseUrl}}/api/stored-pokemon/25/sync
+
+### Set our own fields (full replace; fields left out are cleared)
+PUT {{baseUrl}}/api/stored-pokemon/25
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "localizedName": "ピカチュウ",
+  "region": "Kanto",
+  "tags": ["electric", "starter", "favourite"]
+}
+
+### Invalid own fields: blank name, duplicate tags — 400 with invalidFields
+PUT {{baseUrl}}/api/stored-pokemon/25
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "localizedName": "   ",
+  "region": "Kanto",
+  "tags": ["electric", "electric"]
+}
+
+### Remove Pikachu from the collection — 204
+DELETE {{baseUrl}}/api/stored-pokemon/25
+Authorization: Bearer {{token}}

@@ -1,0 +1,25 @@
+server {
+    listen 80;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    # Same single-origin setup as the Vite dev server: the browser only ever talks to this host.
+    location /api/ {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Hashed build assets never change, so they can be cached for good.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        try_files $uri =404;
+    }
+
+    # Client-side routes (/pokemon/1, /collection, ...) all load the app shell.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
