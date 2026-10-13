@@ -30,4 +30,13 @@ public record StoredPokemon(int id, String name, String category, Integer weight
         return new StoredPokemon(id, fromPokeApi.name(), fromPokeApi.category(), fromPokeApi.weight(),
                 fromPokeApi.sprite(), localizedName, region, tags);
     }
+
+    /**
+     * @param tags our own tags, or {@code null} for none
+     * @return this copy with our own fields replaced by the ones given, and PokeAPI's fields kept
+     */
+    public StoredPokemon editedWith(String localizedName, String region, List<String> tags) {
+        return new StoredPokemon(id, name, category, weight, sprite, localizedName, region,
+                tags == null ? List.of() : List.copyOf(tags));
+    }
 }

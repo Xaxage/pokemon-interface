@@ -1,6 +1,7 @@
 package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.in.BrowseStoredPokemonUseCase;
+import com.xaxage.be.application.port.in.EditStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.SynchronisePokemonUseCase;
 import com.xaxage.be.application.port.in.ViewStoredPokemonUseCase;
 import com.xaxage.be.domain.exception.PokemonNotStoredException;
@@ -43,6 +44,9 @@ class StoredPokemonControllerTest {
 
     @MockitoBean
     private ViewStoredPokemonUseCase viewStoredPokemon;
+
+    @MockitoBean
+    private EditStoredPokemonUseCase editStoredPokemon;
 
     @Nested
     @DisplayName("Must copy a Pokémon from PokeAPI into the local database, with our own fields empty")
@@ -178,6 +182,33 @@ class StoredPokemonControllerTest {
             assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
             assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Unauthorized");
             then(synchronisePokemon).shouldHaveNoInteractions();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must replace our own fields of a stored Pokémon with the ones sent")
+    class ReplacesOurOwnFields {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is updated with \"Bisasam\", \"Kanto\" and tags \"starter\" and \"grass\", "
+                + "so the edited Pokémon comes back with 200")
+        void answersTheEditedPokemon() {
+            given(editStoredPokemon.edit(1, "Bisasam", "Kanto", List.of("starter", "grass")))
+                    .willReturn(new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                            "Bisasam", "Kanto", List.of("starter", "grass")));
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1).with(jwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"Bisasam","region":"Kanto","tags":["starter","grass"]}""")
+                    .exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.id").isEqualTo(1);
+            assertThat(response).bodyJson().extractingPath("$.weight").isEqualTo(69);
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(response).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
+            assertThat(response).bodyJson().extractingPath("$.tags").asArray().containsExactly("starter", "grass");
         }
     }
 }

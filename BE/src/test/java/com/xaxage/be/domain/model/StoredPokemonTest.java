@@ -54,4 +54,33 @@ class StoredPokemonTest {
                     "Bisasam", "Kanto", List.of("starter")));
         }
     }
+
+    @Nested
+    @DisplayName("Must replace our own fields of a stored Pokémon with the ones sent")
+    class ReplacesOurOwnFields {
+
+        @Test
+        @DisplayName("The one where stored Bulbasaur is \"Bisasam\" from \"Kanto\" with tag \"starter\", so editing it with "
+                + "\"Bulby\", no region and tag \"grass\" replaces all three and keeps PokeAPI's fields")
+        void editReplacesOurOwnFieldsAndKeepsPokeApis() {
+            var stored = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    "Bisasam", "Kanto", List.of("starter"));
+
+            var edited = stored.editedWith("Bulby", null, List.of("grass"));
+
+            assertThat(edited).isEqualTo(new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    "Bulby", null, List.of("grass")));
+        }
+
+        @Test
+        @DisplayName("The one where stored Bulbasaur has tag \"starter\" and is edited with no tags given, so it has no tags")
+        void editWithNoTagsGivenLeavesNoTags() {
+            var stored = new StoredPokemon(1, "bulbasaur", "Seed Pokémon", 69, "bulbasaur.png",
+                    "Bisasam", "Kanto", List.of("starter"));
+
+            var edited = stored.editedWith("Bisasam", "Kanto", null);
+
+            assertThat(edited.tags()).isEmpty();
+        }
+    }
 }
