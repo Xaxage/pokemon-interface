@@ -103,6 +103,30 @@ class StoredPokemonPersistenceAdapterTest {
     }
 
     @Nested
+    @DisplayName("Must delete a stored Pokémon")
+    class DeletesAStoredPokemon {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is stored with tags \"starter\" and \"grass\", so deleting it leaves neither "
+                + "Bulbasaur nor its tags stored")
+        void deletingRemovesThePokemonAndItsTags() {
+            entityManager.persistAndFlush(StoredPokemonEntity.from(new StoredPokemon(1, "bulbasaur", "Seed Pokémon",
+                    69, "bulbasaur.png", "Bisasam", "Kanto", List.of("starter", "grass"))));
+            entityManager.clear();
+
+            adapter.delete(1);
+            entityManager.flush();
+            entityManager.clear();
+
+            assertThat(adapter.findById(1)).isEmpty();
+            assertThat(entityManager.getEntityManager()
+                    .createNativeQuery("SELECT COUNT(*) FROM stored_pokemon_tag WHERE pokemon_id = 1")
+                    .getSingleResult())
+                    .isEqualTo(0L);
+        }
+    }
+
+    @Nested
     @DisplayName("Must tell whether any Pokémon is stored")
     class TellsWhetherAnyPokemonIsStored {
 

@@ -29,6 +29,11 @@ class StoredPokemonPersistenceAdapter implements StoredPokemonRepositoryPort {
     }
 
     @Override
+    public void delete(int id) {
+        repository.deleteById(id);
+    }
+
+    @Override
     public StoredPokemonPage findPage(int page, int size) {
         var found = repository.findAll(PageRequest.of(page, size, Sort.by("id")));
         return new StoredPokemonPage(found.map(StoredPokemonEntity::toStoredPokemon).getContent(),

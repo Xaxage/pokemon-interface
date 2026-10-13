@@ -1,6 +1,7 @@
 package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.in.BrowseStoredPokemonUseCase;
+import com.xaxage.be.application.port.in.DeleteStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.EditStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.SynchronisePokemonUseCase;
 import com.xaxage.be.application.port.in.ViewStoredPokemonUseCase;
@@ -50,6 +51,9 @@ class StoredPokemonControllerTest {
 
     @MockitoBean
     private EditStoredPokemonUseCase editStoredPokemon;
+
+    @MockitoBean
+    private DeleteStoredPokemonUseCase deleteStoredPokemon;
 
     @Nested
     @DisplayName("Must copy a Pokémon from PokeAPI into the local database, with our own fields empty")
@@ -255,6 +259,21 @@ class StoredPokemonControllerTest {
             assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
                     .containsExactly(invalidField);
             then(editStoredPokemon).shouldHaveNoInteractions();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must delete a stored Pokémon")
+    class DeletesAStoredPokemon {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is deleted, so the reader gets a 204 with no body")
+        void answers204WithNoBody() {
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1).with(jwt()).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NO_CONTENT);
+            assertThat(response).body().isEmpty();
+            then(deleteStoredPokemon).should().delete(1);
         }
     }
 }

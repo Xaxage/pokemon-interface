@@ -20,6 +20,11 @@ public interface StoredPokemonRepositoryPort {
     StoredPokemon save(StoredPokemon pokemon);
 
     /**
+     * Removes the stored Pokémon with the id, together with our own fields.
+     */
+    void delete(int id);
+
+    /**
      * @return the given page of stored Pokémon, ordered by id, with how many are stored in all
      */
     StoredPokemonPage findPage(int page, int size);

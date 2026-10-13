@@ -248,6 +248,27 @@ class LocalDataModificationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must delete a stored Pokémon")
+    class DeletesAStoredPokemon {
+
+        @Test
+        @DisplayName("The one where Bulbasaur is deleted (204), and viewing it afterwards gives a 404")
+        void deletedBulbasaurIsNoLongerStored() {
+            storesBulbasaur();
+            database.sql("INSERT INTO stored_pokemon_tag (pokemon_id, position, tag) VALUES (1, 0, 'starter')")
+                    .update();
+
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NO_CONTENT);
+            var viewed = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+            assertThat(viewed).hasStatus(HttpStatus.NOT_FOUND);
+        }
+    }
+
     /**
      * @return the Authorization header of a user who has just signed in: a bearer token signed with HS256, valid
      * for the next hour

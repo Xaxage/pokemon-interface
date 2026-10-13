@@ -4,6 +4,7 @@ import com.xaxage.be.adapter.in.web.dto.EditStoredPokemonRequest;
 import com.xaxage.be.adapter.in.web.dto.StoredPokemonPageResponse;
 import com.xaxage.be.adapter.in.web.dto.StoredPokemonResponse;
 import com.xaxage.be.application.port.in.BrowseStoredPokemonUseCase;
+import com.xaxage.be.application.port.in.DeleteStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.EditStoredPokemonUseCase;
 import com.xaxage.be.application.port.in.SynchronisePokemonUseCase;
 import com.xaxage.be.application.port.in.ViewStoredPokemonUseCase;
@@ -25,15 +26,18 @@ class StoredPokemonController {
     private final BrowseStoredPokemonUseCase browseStoredPokemon;
     private final ViewStoredPokemonUseCase viewStoredPokemon;
     private final EditStoredPokemonUseCase editStoredPokemon;
+    private final DeleteStoredPokemonUseCase deleteStoredPokemon;
 
     StoredPokemonController(SynchronisePokemonUseCase synchronisePokemon,
                             BrowseStoredPokemonUseCase browseStoredPokemon,
                             ViewStoredPokemonUseCase viewStoredPokemon,
-                            EditStoredPokemonUseCase editStoredPokemon) {
+                            EditStoredPokemonUseCase editStoredPokemon,
+                            DeleteStoredPokemonUseCase deleteStoredPokemon) {
         this.synchronisePokemon = synchronisePokemon;
         this.browseStoredPokemon = browseStoredPokemon;
         this.viewStoredPokemon = viewStoredPokemon;
         this.editStoredPokemon = editStoredPokemon;
+        this.deleteStoredPokemon = deleteStoredPokemon;
     }
 
     @PostMapping("/{id}/sync")
@@ -61,5 +65,11 @@ class StoredPokemonController {
     StoredPokemonResponse edit(@PathVariable int id, @Valid @RequestBody EditStoredPokemonRequest request) {
         return StoredPokemonResponse.from(
                 editStoredPokemon.edit(id, request.localizedName(), request.region(), request.tags()));
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void delete(@PathVariable int id) {
+        deleteStoredPokemon.delete(id);
     }
 }
