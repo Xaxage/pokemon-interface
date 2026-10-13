@@ -22,4 +22,19 @@ class BCryptPasswordHasherTest {
             assertThat(hash).matches("\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}");
         }
     }
+
+    @Nested
+    @DisplayName("Must give a token only to a user who signs in with the right credentials")
+    class TellsTheRightPasswordFromAWrongOne {
+
+        @Test
+        @DisplayName("The one where the hash of \"pikachu123\" matches \"pikachu123\" but not \"raichu1234\"")
+        void onlyTheRightPasswordMatchesItsHash() {
+            var hasher = new BCryptPasswordHasher();
+            var hash = hasher.hash("pikachu123");
+
+            assertThat(hasher.matches("pikachu123", hash)).isTrue();
+            assertThat(hasher.matches("raichu1234", hash)).isFalse();
+        }
+    }
 }

@@ -1,7 +1,10 @@
 package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.in.RegisterUserUseCase;
+import com.xaxage.be.application.port.in.SignInUseCase;
+import com.xaxage.be.domain.exception.InvalidCredentialsException;
 import com.xaxage.be.domain.exception.UsernameTakenException;
+import com.xaxage.be.domain.model.AccessToken;
 import com.xaxage.be.domain.model.User;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -30,6 +33,9 @@ class AuthControllerTest {
 
     @MockitoBean
     private RegisterUserUseCase registerUser;
+
+    @MockitoBean
+    private SignInUseCase signIn;
 
     @Nested
     @DisplayName("Must register a new user with a username and password")
@@ -111,6 +117,62 @@ class AuthControllerTest {
             assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
                     .containsExactly(invalidField);
             then(registerUser).shouldHaveNoInteractions();
+        }
+    }
+
+    @Nested
+    @DisplayName("Must give a token valid for 1 hour to a user who signs in with the right credentials")
+    class GivesATokenValidForOneHour {
+
+        @Test
+        @DisplayName("The one where \"ash\" signs in with \"pikachu123\" and gets a token (200)")
+        void signInAnswers200WithTheToken() {
+            given(signIn.signIn("ash", "pikachu123")).willReturn(new AccessToken("token-for-ash"));
+
+            var response = mvc.post().uri("/api/auth/sign-in")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"username":"ash","password":"pikachu123"}""")
+                    .exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.token").isEqualTo("token-for-ash");
+        }
+
+        @Test
+        @DisplayName("The one where the credentials are rejected, so the reader gets a 401 that does not say whether "
+                + "the username or the password is wrong")
+        void rejectedCredentialsAnswer401() {
+            given(signIn.signIn("misty", "pikachu123")).willThrow(new InvalidCredentialsException());
+
+            var response = mvc.post().uri("/api/auth/sign-in")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"username":"misty","password":"pikachu123"}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertThat(response).bodyJson().extractingPath("$.detail").isEqualTo("The username or password is wrong");
+        }
+
+        @ParameterizedTest(name = "The one where the {1} is left out, so it is rejected naming the {1}")
+        @CsvSource(delimiter = '|', value = {
+                "{\"password\":\"pikachu123\"} | username",
+                "{\"username\":\"ash\"}        | password"})
+        @DisplayName("The one where the username or password is left out of the sign-in, so the reader gets a 400 "
+                + "naming the field and no token")
+        void missingValueAnswers400NamingTheField(String body, String invalidField) {
+            var response = mvc.post().uri("/api/auth/sign-in")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
+                    .containsExactly(invalidField);
+            then(signIn).shouldHaveNoInteractions();
         }
     }
 }

@@ -1,6 +1,7 @@
 package com.xaxage.be.adapter.in.web;
 
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
+import com.xaxage.be.domain.exception.InvalidCredentialsException;
 import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import com.xaxage.be.domain.exception.PokemonNotStoredException;
 import com.xaxage.be.domain.exception.UsernameTakenException;
@@ -48,6 +49,11 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PokemonNotStoredException.class)
     ProblemDetail pokemonNotStored(PokemonNotStoredException notStored) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notStored.getMessage());
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    ProblemDetail invalidCredentials(InvalidCredentialsException invalid) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, invalid.getMessage());
     }
 
     @ExceptionHandler(UsernameTakenException.class)

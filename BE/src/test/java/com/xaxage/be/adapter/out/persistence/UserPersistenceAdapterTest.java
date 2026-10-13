@@ -64,4 +64,19 @@ class UserPersistenceAdapterTest {
             assertThat(adapter.existsByUsername("misty")).isFalse();
         }
     }
+
+    @Nested
+    @DisplayName("Must find a registered user by username")
+    class FindsARegisteredUser {
+
+        @Test
+        @DisplayName("The one where ash is registered, so ash is found and misty is not")
+        void onlyARegisteredUserIsFound() {
+            entityManager.persistAndFlush(UserEntity.from(new User("ash", "hash-of-pikachu123")));
+            entityManager.clear();
+
+            assertThat(adapter.findByUsername("ash")).contains(new User("ash", "hash-of-pikachu123"));
+            assertThat(adapter.findByUsername("misty")).isEmpty();
+        }
+    }
 }

@@ -1,5 +1,6 @@
 package com.xaxage.be.acceptance;
 
+import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -16,6 +17,10 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+
+import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -123,6 +128,58 @@ class UserAuthenticationAcceptanceIT {
             assertThat(stored).doesNotContain("pikachu123");
             assertThat(stored).matches("\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}");
         }
+    }
+
+    @Nested
+    @DisplayName("Must give a token valid for 1 hour to a user who signs in with the right credentials")
+    class GivesATokenValidForOneHour {
+
+        @Test
+        @DisplayName("The one where \"ash\" signs in with \"pikachu123\" and gets a token (200)")
+        void ashGetsATokenValidForOneHour() throws UnsupportedEncodingException {
+            register("ash", "pikachu123");
+
+            var response = signIn("ash", "pikachu123");
+
+            assertThat(response).hasStatusOk();
+            var claims = claimsOf(JsonPath.read(response.getResponse().getContentAsString(), "$.token"));
+            assertThat((String) JsonPath.read(claims, "$.sub")).isEqualTo("ash");
+            long issuedAt = ((Number) JsonPath.read(claims, "$.iat")).longValue();
+            long expiresAt = ((Number) JsonPath.read(claims, "$.exp")).longValue();
+            assertThat(expiresAt - issuedAt).isEqualTo(3600);
+        }
+
+        @Test
+        @DisplayName("The one where the password is wrong or the user does not exist; both get the same 401, so the "
+                + "reader cannot tell which")
+        void wrongPasswordAndUnknownUserGetTheSame401() throws UnsupportedEncodingException {
+            register("ash", "pikachu123");
+
+            var wrongPassword = signIn("ash", "raichu1234");
+            var unknownUser = signIn("misty", "pikachu123");
+
+            assertThat(wrongPassword).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(wrongPassword).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(wrongPassword).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertThat(unknownUser).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(unknownUser.getResponse().getContentAsString())
+                    .isEqualTo(wrongPassword.getResponse().getContentAsString());
+        }
+    }
+
+    private MvcTestResult signIn(String username, String password) {
+        return mvc.post().uri("/api/auth/sign-in")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"username":"%s","password":"%s"}""".formatted(username, password))
+                .exchange();
+    }
+
+    /**
+     * @return the claims of the JWT, as JSON
+     */
+    private static String claimsOf(String token) {
+        return new String(Base64.getUrlDecoder().decode(token.split("\\.")[1]), StandardCharsets.UTF_8);
     }
 
     private MvcTestResult register(String username, String password) {

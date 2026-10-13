@@ -13,4 +13,9 @@ class BCryptPasswordHasher implements PasswordHasherPort {
     public String hash(String password) {
         return encoder.encode(password);
     }
+
+    @Override
+    public boolean matches(String password, String hash) {
+        return encoder.matches(password, hash);
+    }
 }
