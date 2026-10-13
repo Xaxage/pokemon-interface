@@ -1,5 +1,9 @@
 # Pokémon Interface
 
+> **Built entirely with AI in about 6 hours. No code was written by hand.** I used Claude Code with an experimental
+> workflow: hexagonal architecture, ATDD for the outer loop and TDD for the inner loop. How it works:
+> [`GENAI_ASSIGNMENT.md`](GENAI_ASSIGNMENT.md).
+
 A full-stack app that browses Pokémon live from [PokeAPI](https://pokeapi.co/docs/v2), copies the ones you
 choose into a local database, and lets signed-in users add their own fields (localized name, region, tags) on top.
 
