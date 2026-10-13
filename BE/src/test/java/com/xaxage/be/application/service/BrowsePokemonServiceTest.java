@@ -1,6 +1,7 @@
 package com.xaxage.be.application.service;
 
 import com.xaxage.be.application.port.out.PokeApiPort;
+import com.xaxage.be.application.port.out.PokeApiUnavailableException;
 import com.xaxage.be.domain.model.LearnMethod;
 import com.xaxage.be.domain.model.Pokemon;
 import com.xaxage.be.domain.model.PokemonPage;
@@ -11,8 +12,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 
@@ -83,6 +88,44 @@ class BrowsePokemonServiceTest {
             var page = new BrowsePokemonService(pokeApi).browse(0, 20);
 
             assertThat(page).isEqualTo(new PokemonPage(List.of(new Pokemon(2, "ivysaur")), false, 1));
+        }
+    }
+
+    @Nested
+    @DisplayName("Must fetch the details of a page's Pokémon at the same time, so a page costs one PokeAPI round trip, not one per Pokémon")
+    class FetchesDetailsConcurrently {
+
+        @Test
+        @DisplayName("The one where Bulbasaur's details only arrive once Ivysaur's are being fetched too, and the page still comes back in order")
+        void fetchesEveryListedPokemonsDetailsAtOnce() {
+            var pokeApi = mock(PokeApiPort.class);
+            var bothRequested = new CountDownLatch(2);
+            given(pokeApi.fetchPokemon(0, 20))
+                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur"), new Pokemon(2, "ivysaur")), false, 2));
+            given(pokeApi.fetchPokemonDetails(anyInt())).willAnswer(call -> {
+                bothRequested.countDown();
+                if (!bothRequested.await(5, TimeUnit.SECONDS)) {
+                    throw new AssertionError("details were fetched one Pokémon at a time");
+                }
+                int id = call.getArgument(0);
+                return Optional.of(new Pokemon(id, id == 1 ? "bulbasaur" : "ivysaur").withSprite(id + ".png"));
+            });
+
+            var page = new BrowsePokemonService(pokeApi).browse(0, 20);
+
+            assertThat(page.content()).extracting(Pokemon::sprite).containsExactly("1.png", "2.png");
+        }
+
+        @Test
+        @DisplayName("The one where PokeAPI is unavailable while fetching Bulbasaur's details, so browsing reports PokeAPI as unavailable")
+        void reportsPokeApiUnavailableFromAConcurrentFetch() {
+            var pokeApi = mock(PokeApiPort.class);
+            given(pokeApi.fetchPokemon(0, 20))
+                    .willReturn(new PokemonPage(List.of(new Pokemon(1, "bulbasaur")), false, 1));
+            given(pokeApi.fetchPokemonDetails(1)).willThrow(new PokeApiUnavailableException(new RuntimeException("timeout")));
+
+            assertThatThrownBy(() -> new BrowsePokemonService(pokeApi).browse(0, 20))
+                    .isInstanceOf(PokeApiUnavailableException.class);
         }
     }
 

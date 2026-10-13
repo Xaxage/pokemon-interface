@@ -1,12 +1,19 @@
-import { useState } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { ErrorBoundary } from './ErrorBoundary';
 
 export function Layout() {
   const { session, signOut } = useAuth();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const navigationType = useNavigationType();
   const close = () => setMenuOpen(false);
+
+  // A newly opened page starts at the top; Back/Forward (POP) keeps the browser's own scroll restoration.
+  useEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo({ top: 0 });
+  }, [location.pathname, navigationType]);
 
   return (
     <div className="app">
@@ -67,7 +74,9 @@ export function Layout() {
       </header>
 
       <main className="container main">
-        <Outlet />
+        <ErrorBoundary key={location.pathname}>
+          <Outlet />
+        </ErrorBoundary>
       </main>
 
       <footer className="footer container">

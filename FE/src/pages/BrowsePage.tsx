@@ -15,8 +15,6 @@ export function BrowsePage() {
     if (data && data.content.length === 0 && data.totalPages > 0 && page >= data.totalPages) setPage(data.totalPages - 1);
   }, [data, page, setPage]);
 
-  useEffect(() => window.scrollTo({ top: 0, behavior: 'smooth' }), [page]);
-
   return (
     <section>
       <header className="page-header">
