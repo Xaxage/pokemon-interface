@@ -1,6 +1,7 @@
 package com.xaxage.be.application.service;
 
 import com.xaxage.be.application.port.out.StoredPokemonRepositoryPort;
+import com.xaxage.be.domain.exception.PokemonNotStoredException;
 import com.xaxage.be.domain.model.StoredPokemon;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -10,10 +11,12 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.then;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 
 @DisplayName("Editing our own fields of a Pokémon stored in the local database")
 class EditStoredPokemonServiceTest {
@@ -38,6 +41,25 @@ class EditStoredPokemonServiceTest {
                     "Bisasam", "Kanto", List.of("starter", "grass"));
             assertThat(edited).isEqualTo(expected);
             then(storedPokemon).should().save(expected);
+        }
+    }
+
+    @Nested
+    @DisplayName("Must answer 404 when the Pokémon is not stored locally")
+    class ReportsAPokemonThatIsNotStored {
+
+        @Test
+        @DisplayName("The one where id 99999 is not stored, so it is reported as not stored and nothing is saved")
+        void pokemonNotStoredIsReportedAndNothingIsSaved() {
+            var storedPokemon = mock(StoredPokemonRepositoryPort.class);
+            given(storedPokemon.findById(99999)).willReturn(Optional.empty());
+
+            var service = new EditStoredPokemonService(storedPokemon);
+
+            assertThatThrownBy(() -> service.edit(99999, "Bisasam", null, List.of()))
+                    .isInstanceOf(PokemonNotStoredException.class)
+                    .hasMessage("No Pokémon with the id 99999 is stored");
+            then(storedPokemon).should(never()).save(any());
         }
     }
 }

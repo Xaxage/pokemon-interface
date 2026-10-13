@@ -269,6 +269,42 @@ class LocalDataModificationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must answer 404 when the Pokémon is not stored locally")
+    class Answers404WhenThePokemonIsNotStoredLocally {
+
+        @Test
+        @DisplayName("The one where id 99999 is updated but not stored, so the reader gets a 404 and nothing is stored")
+        void updatingAPokemonThatIsNotStoredIsNotFound() {
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 99999)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"Bisasam"}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
+            assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
+            assertThat(database.sql("SELECT COUNT(*) FROM stored_pokemon").query(Integer.class).single())
+                    .isZero();
+        }
+
+        @Test
+        @DisplayName("The one where id 99999 is deleted but not stored, so the reader gets a 404")
+        void deletingAPokemonThatIsNotStoredIsNotFound() {
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 99999)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(404);
+            assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Not Found");
+        }
+    }
+
     /**
      * @return the Authorization header of a user who has just signed in: a bearer token signed with HS256, valid
      * for the next hour
