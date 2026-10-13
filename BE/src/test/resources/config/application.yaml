@@ -1,0 +1,15 @@
+# Test-only overrides, layered on top of src/main/resources/application.yaml.
+# Tests never touch the dev MariaDB: they use an in-memory H2 database running in MariaDB mode, so SQL and
+# behaviour match the real one as closely as possible. Like a real server, it is one database shared by every
+# app started in the test run (DB_CLOSE_DELAY=-1 keeps it alive until the JVM exits), and it starts empty on
+# every run. The schema comes from the main config's ddl-auto: update.
+spring:
+  datasource:
+    url: jdbc:h2:mem:pokemon;MODE=MariaDB;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    driver-class-name: org.h2.Driver
+  jpa:
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
