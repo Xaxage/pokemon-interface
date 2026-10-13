@@ -8,7 +8,11 @@ export const storedKeys = {
   pages: () => [...storedKeys.all, 'page'] as const,
   page: (page: number, size: number) => [...storedKeys.pages(), page, size] as const,
   detail: (id: number) => [...storedKeys.all, 'detail', id] as const,
+  ids: () => [...storedKeys.all, 'ids'] as const,
 };
+
+/** The collection endpoint's largest page, so even a big collection takes only a few requests. */
+const LARGEST_PAGE = 100;
 
 export function useStoredPokemonPage(page: number, size: number) {
   return useQuery({
@@ -33,16 +37,41 @@ export function useStoredPokemon(id: number) {
   });
 }
 
+/** The ids of every Pokémon in the collection, read page by page. */
+async function fetchCollectionIds(signal: AbortSignal): Promise<number[]> {
+  const ids: number[] = [];
+  for (let page = 0; ; page++) {
+    const result = await storedPokemonApi.browse(page, LARGEST_PAGE, signal);
+    ids.push(...result.content.map((pokemon) => pokemon.id));
+    if (page + 1 >= result.totalPages) return ids;
+  }
+}
+
+/** Whether a Pokémon is in the collection; undefined until that is known. Cards share one query for all ids. */
+export function useIsInCollection(id: number): boolean | undefined {
+  const { data } = useQuery({
+    queryKey: storedKeys.ids(),
+    queryFn: ({ signal }) => fetchCollectionIds(signal),
+    staleTime: 60_000,
+    select: (ids) => ids.includes(id),
+  });
+  return data;
+}
+
 /** Keeps every cached view of the collection in step with a change the server confirmed. */
 function useCollectionCache() {
   const queryClient = useQueryClient();
   return {
     stored: (pokemon: StoredPokemon) => {
       queryClient.setQueryData(storedKeys.detail(pokemon.id), pokemon);
+      queryClient.setQueryData<number[]>(storedKeys.ids(), (ids) =>
+        ids && !ids.includes(pokemon.id) ? [...ids, pokemon.id] : ids,
+      );
       return queryClient.invalidateQueries({ queryKey: storedKeys.pages() });
     },
     removed: (id: number) => {
       queryClient.setQueryData(storedKeys.detail(id), null);
+      queryClient.setQueryData<number[]>(storedKeys.ids(), (ids) => ids?.filter((stored) => stored !== id));
       return queryClient.invalidateQueries({ queryKey: storedKeys.pages() });
     },
   };

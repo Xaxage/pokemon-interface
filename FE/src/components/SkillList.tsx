@@ -32,3 +32,45 @@ export function SkillList({ skills }: { skills: Skill[] }) {
     </div>
   );
 }
+
+/** Lowest level the move is learned at by levelling up, or null when it is only learned some other way. */
+function levelLearned(skill: Skill): number | null {
+  const levels = skill.methods.flatMap((method) => (method.level ? [method.level] : []));
+  return levels.length > 0 ? Math.min(...levels) : null;
+}
+
+/** Level-up moves first, in the order they are learned, then every other move alphabetically. */
+function byHowLearned(a: Skill, b: Skill): number {
+  const levelA = levelLearned(a);
+  const levelB = levelLearned(b);
+  if (levelA !== null && levelB !== null && levelA !== levelB) return levelA - levelB;
+  if (levelA !== null && levelB === null) return -1;
+  if (levelA === null && levelB !== null) return 1;
+  return a.name.localeCompare(b.name);
+}
+
+/** Every move in full, for the detail page. */
+export function SkillTable({ skills }: { skills: Skill[] }) {
+  if (skills.length === 0) return <p className="muted">No skills in the newest games.</p>;
+
+  return (
+    <div className="skill-table__scroll">
+      <table className="skill-table">
+        <thead>
+          <tr>
+            <th scope="col">Move</th>
+            <th scope="col">How it is learned</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[...skills].sort(byHowLearned).map((skill) => (
+            <tr key={skill.name}>
+              <th scope="row">{displayName(skill.name)}</th>
+              <td className="muted">{howLearned(skill)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}

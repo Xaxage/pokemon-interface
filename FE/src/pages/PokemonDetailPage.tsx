@@ -1,12 +1,14 @@
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { EvolutionTree } from '../components/EvolutionTree';
+import { InCollectionBadge } from '../components/InCollectionBadge';
 import { PokemonSprite } from '../components/PokemonSprite';
+import { SkillTable } from '../components/SkillList';
 import { StatBars } from '../components/StatBars';
 import { ErrorState, Spinner } from '../components/Status';
 import { SyncButton } from '../components/SyncButton';
 import { dexNumber, displayName, weightInKg } from '../format';
-import { usePokemonDetails } from '../hooks/usePokemon';
+import { usePokemonDetails, usePokemonSkills } from '../hooks/usePokemon';
 import { useStoredPokemon } from '../hooks/useStoredPokemon';
 import { NotFoundPage } from './NotFoundPage';
 
@@ -53,6 +55,8 @@ function PokemonDetail({ id }: { id: number }) {
         </section>
 
         <CollectionPanel id={pokemon.id} name={pokemon.name} />
+
+        <SkillsPanel id={pokemon.id} />
       </div>
     </article>
   );
@@ -71,6 +75,7 @@ function CollectionPanel({ id, name }: { id: number; name: string }) {
         <ErrorState error={error} />
       ) : stored ? (
         <>
+          <InCollectionBadge />
           <dl className="facts facts--stacked">
             <div>
               <dt>Category</dt>
@@ -121,6 +126,28 @@ function CollectionPanel({ id, name }: { id: number; name: string }) {
             <SyncButton id={id} name={name} />
           </div>
         </>
+      )}
+    </section>
+  );
+}
+
+function SkillsPanel({ id }: { id: number }) {
+  const { data: skills, isPending, error, refetch } = usePokemonSkills(id);
+
+  return (
+    <section className="panel panel--wide">
+      <h2>
+        Skills
+        {skills && skills.length > 0 && <span className="panel__count">{skills.length}</span>}
+      </h2>
+      {isPending ? (
+        <Spinner label="Loading skills…" />
+      ) : error ? (
+        <ErrorState error={error} onRetry={() => refetch()} />
+      ) : skills === null ? (
+        <p className="muted">Skills are not available for this Pokémon.</p>
+      ) : (
+        <SkillTable skills={skills} />
       )}
     </section>
   );

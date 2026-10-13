@@ -2,6 +2,8 @@ import { Link } from 'react-router-dom';
 import type { Pokemon } from '../api/types';
 import { dexNumber, displayName, weightInKg } from '../format';
 import { usePrefetchPokemonDetails } from '../hooks/usePokemon';
+import { useIsInCollection } from '../hooks/useStoredPokemon';
+import { InCollectionBadge } from './InCollectionBadge';
 import { PokemonSprite } from './PokemonSprite';
 import { SkillList } from './SkillList';
 import { SyncButton } from './SyncButton';
@@ -10,6 +12,7 @@ export function PokemonCard({ pokemon }: { pokemon: Pokemon }) {
   const name = displayName(pokemon.name);
   const prefetchDetails = usePrefetchPokemonDetails();
   const prefetch = () => prefetchDetails(pokemon.id);
+  const inCollection = useIsInCollection(pokemon.id);
 
   return (
     <li className="card">
@@ -30,7 +33,7 @@ export function PokemonCard({ pokemon }: { pokemon: Pokemon }) {
       </dl>
       <SkillList skills={pokemon.skills} />
       <div className="card__actions">
-        <SyncButton id={pokemon.id} name={pokemon.name} />
+        {inCollection ? <InCollectionBadge /> : <SyncButton id={pokemon.id} name={pokemon.name} />}
       </div>
     </li>
   );

@@ -1065,3 +1065,76 @@ input[aria-invalid='true'] {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ---------- Collection status ---------- */
+.in-collection {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  width: 100%;
+  min-height: 36px;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--success) 40%, transparent);
+  border-radius: var(--radius-small);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+  color: var(--success);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.panel .in-collection {
+  width: auto;
+  margin-bottom: 0.75rem;
+}
+
+/* ---------- Skill table (detail page) ---------- */
+.panel--wide {
+  grid-column: 1 / -1;
+}
+
+.panel__count {
+  margin-left: 0.4rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.skill-table__scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-small);
+}
+
+.skill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.skill-table th,
+.skill-table td {
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.skill-table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-2);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.skill-table tbody th {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.skill-table tbody tr + tr {
+  border-top: 1px solid var(--border);
+}
