@@ -268,6 +268,20 @@ class UserAuthenticationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must come with a demo user")
+    class ComesWithADemoUser {
+
+        @Test
+        @DisplayName("The one where the app starts and \"demo\" / \"demo1234\" can sign in straight away")
+        void demoCanSignInStraightAway() {
+            var response = signIn("demo", "demo1234");
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.token").isNotNull();
+        }
+    }
+
     /**
      * @return a JWT signed with HS256 using the application's key, issued and expiring at the given epoch seconds
      */
