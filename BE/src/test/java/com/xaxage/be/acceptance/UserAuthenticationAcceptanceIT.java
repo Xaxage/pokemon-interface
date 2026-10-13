@@ -10,6 +10,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -18,8 +19,12 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.time.Instant;
 import java.util.Base64;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -35,6 +40,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 @DisplayName("US-05 User Authentication")
 class UserAuthenticationAcceptanceIT {
 
+    /**
+     * The key the application signs and checks tokens with, set for this test run only.
+     */
+    private static final String TOKEN_SECRET = "acceptance-test-secret-that-is-at-least-256-bits-long";
+
     @Autowired
     private MockMvcTester mvc;
 
@@ -44,6 +54,7 @@ class UserAuthenticationAcceptanceIT {
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry registry) {
         registry.add("pokeapi.base-url", () -> "http://localhost:1/pokeapi-is-not-used");
+        registry.add("security.jwt.secret", () -> TOKEN_SECRET);
     }
 
     @BeforeEach
@@ -164,6 +175,115 @@ class UserAuthenticationAcceptanceIT {
             assertThat(unknownUser).hasStatus(HttpStatus.UNAUTHORIZED);
             assertThat(unknownUser.getResponse().getContentAsString())
                     .isEqualTo(wrongPassword.getResponse().getContentAsString());
+        }
+    }
+
+    @Nested
+    @DisplayName("Must accept only valid, unexpired tokens on protected actions")
+    class AcceptsOnlyValidUnexpiredTokens {
+
+        @BeforeEach
+        void bulbasaurIsStored() {
+            database.sql("DELETE FROM stored_pokemon_tag WHERE pokemon_id = 1").update();
+            database.sql("DELETE FROM stored_pokemon WHERE id = 1").update();
+            database.sql("""
+                            INSERT INTO stored_pokemon (id, name, category, weight, sprite, localized_name, region)
+                            VALUES (1, 'bulbasaur', 'Seed Pokémon', 69, 'bulbasaur.png', NULL, NULL)""")
+                    .update();
+        }
+
+        @Test
+        @DisplayName("The one where no token is sent, so the protected action gets a 401")
+        void noTokenIsUnauthorized() {
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertIsUnauthorizedAndBulbasaurIsStillStored(response);
+        }
+
+        @Test
+        @DisplayName("The one where the token is tampered with, so the protected action gets a 401")
+        void tamperedTokenIsUnauthorized() throws UnsupportedEncodingException {
+            var parts = tokenFor("ash", "pikachu123").split("\\.");
+            var tamperedClaims = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    claimsOf(String.join(".", parts)).replace("\"ash\"", "\"gary\"").getBytes(StandardCharsets.UTF_8));
+
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + parts[0] + "." + tamperedClaims + "." + parts[2])
+                    .exchange();
+
+            assertIsUnauthorizedAndBulbasaurIsStillStored(response);
+        }
+
+        @Test
+        @DisplayName("The one where the token is malformed, so the protected action gets a 401")
+        void malformedTokenIsUnauthorized() {
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer not-a-token")
+                    .exchange();
+
+            assertIsUnauthorizedAndBulbasaurIsStillStored(response);
+        }
+
+        @Test
+        @DisplayName("The one where the token is over 1 hour old, so it has expired and the protected action gets a "
+                + "401")
+        void expiredTokenIsUnauthorized() {
+            var now = Instant.now().getEpochSecond();
+
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + signedToken("ash", now - 3601, now - 1))
+                    .exchange();
+
+            assertIsUnauthorizedAndBulbasaurIsStillStored(response);
+        }
+
+        @Test
+        @DisplayName("The one where the token is valid, so the protected action is allowed")
+        void validTokenIsAllowed() throws UnsupportedEncodingException {
+            var token = tokenFor("ash", "pikachu123");
+
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.NO_CONTENT);
+            assertThat(database.sql("SELECT COUNT(*) FROM stored_pokemon WHERE id = 1").query(Integer.class).single())
+                    .isZero();
+        }
+
+        private void assertIsUnauthorizedAndBulbasaurIsStillStored(MvcTestResult response) {
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertThat(database.sql("SELECT COUNT(*) FROM stored_pokemon WHERE id = 1").query(Integer.class).single())
+                    .isOne();
+        }
+
+        /**
+         * @return the token the user gets on registering and signing in
+         */
+        private String tokenFor(String username, String password) throws UnsupportedEncodingException {
+            register(username, password);
+            return JsonPath.read(signIn(username, password).getResponse().getContentAsString(), "$.token");
+        }
+    }
+
+    /**
+     * @return a JWT signed with HS256 using the application's key, issued and expiring at the given epoch seconds
+     */
+    private static String signedToken(String subject, long issuedAt, long expiresAt) {
+        var encoder = Base64.getUrlEncoder().withoutPadding();
+        var header = encoder.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        var claims = encoder.encodeToString("{\"sub\":\"%s\",\"iat\":%d,\"exp\":%d}"
+                .formatted(subject, issuedAt, expiresAt).getBytes(StandardCharsets.UTF_8));
+        try {
+            var hmac = Mac.getInstance("HmacSHA256");
+            hmac.init(new SecretKeySpec(TOKEN_SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
+            var signature = encoder.encodeToString(
+                    hmac.doFinal((header + "." + claims).getBytes(StandardCharsets.UTF_8)));
+            return header + "." + claims + "." + signature;
+        } catch (GeneralSecurityException impossible) {
+            throw new IllegalStateException(impossible);
         }
     }
 

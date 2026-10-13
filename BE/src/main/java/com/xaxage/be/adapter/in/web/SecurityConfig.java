@@ -10,6 +10,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
@@ -17,6 +18,7 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 /**
  * Synchronising, updating and deleting stored Pokémon need a signed-in user, shown by a valid bearer token;
@@ -54,12 +56,15 @@ class SecurityConfig {
     }
 
     /**
-     * Tokens are signed with HS256 using the configured secret.
+     * Tokens are signed with HS256 using the configured secret, and stop being accepted the moment they expire:
+     * no clock skew is allowed, as the tokens are issued by this same app.
      */
     @Bean
     JwtDecoder jwtDecoder(@Value("${security.jwt.secret}") String secret) {
-        return NimbusJwtDecoder
+        var decoder = NimbusJwtDecoder
                 .withSecretKey(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256"))
                 .build();
+        decoder.setJwtValidator(new JwtTimestampValidator(Duration.ZERO));
+        return decoder;
     }
 }
