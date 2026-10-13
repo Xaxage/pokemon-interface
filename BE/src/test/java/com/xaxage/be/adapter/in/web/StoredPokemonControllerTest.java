@@ -12,7 +12,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -22,6 +24,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
@@ -209,6 +212,49 @@ class StoredPokemonControllerTest {
             assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
             assertThat(response).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
             assertThat(response).bodyJson().extractingPath("$.tags").asArray().containsExactly("starter", "grass");
+        }
+    }
+
+    @Nested
+    @DisplayName("Must reject updates with invalid values (400, with the standard error body listing each invalid field)")
+    class RejectsUpdatesWithInvalidValues {
+
+        static Stream<Arguments> rejectedValues() {
+            return Stream.of(
+                    Arguments.of("a blank localized name", """
+                            {"localizedName":"  "}""", "localizedName"),
+                    Arguments.of("a localized name over 50 characters", """
+                            {"localizedName":"%s"}""".formatted("a".repeat(51)), "localizedName"),
+                    Arguments.of("a blank region", """
+                            {"region":""}""", "region"),
+                    Arguments.of("a region over 50 characters", """
+                            {"region":"%s"}""".formatted("k".repeat(51)), "region"),
+                    Arguments.of("more than 10 tags", """
+                            {"tags":["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10","t11"]}""", "tags"),
+                    Arguments.of("a blank tag", """
+                            {"tags":["starter"," "]}""", "tags[1]"),
+                    Arguments.of("a tag over 30 characters", """
+                            {"tags":["%s"]}""".formatted("t".repeat(31)), "tags[0]"),
+                    Arguments.of("a duplicate tag", """
+                            {"tags":["starter","grass","starter"]}""", "tags"));
+        }
+
+        @ParameterizedTest(name = "The one where the update sends {0}, so it is rejected naming the field")
+        @MethodSource("rejectedValues")
+        @DisplayName("The one where the update sends a value that is not valid, so the reader gets a 400 with the "
+                + "standard error body naming the field")
+        void rejectsTheInvalidField(String what, String body, String invalidField) {
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1).with(jwt())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(400);
+            assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
+                    .containsExactly(invalidField);
+            then(editStoredPokemon).shouldHaveNoInteractions();
         }
     }
 }

@@ -4,10 +4,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -20,6 +24,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -121,6 +127,124 @@ class LocalDataModificationAcceptanceIT {
             assertThat(response).bodyJson().extractingPath("$.weight").isEqualTo(69);
             var viewed = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
             assertThat(viewed).bodyJson().extractingPath("$.weight").isEqualTo(69);
+        }
+    }
+
+    @Nested
+    @DisplayName("Must reject updates with invalid values (400, with the standard error body listing each invalid field)")
+    class RejectsUpdatesWithInvalidValues {
+
+        static Stream<Arguments> rejectedValues() {
+            return Stream.of(
+                    Arguments.of("a blank localized name", """
+                            {"localizedName":"  "}""", "localizedName"),
+                    Arguments.of("a localized name over 50 characters", """
+                            {"localizedName":"%s"}""".formatted("a".repeat(51)), "localizedName"),
+                    Arguments.of("a blank region", """
+                            {"region":""}""", "region"),
+                    Arguments.of("a region over 50 characters", """
+                            {"region":"%s"}""".formatted("k".repeat(51)), "region"),
+                    Arguments.of("more than 10 tags", """
+                            {"tags":["t1","t2","t3","t4","t5","t6","t7","t8","t9","t10","t11"]}""", "tags"),
+                    Arguments.of("a blank tag", """
+                            {"tags":["starter"," "]}""", "tags[1]"),
+                    Arguments.of("a tag over 30 characters", """
+                            {"tags":["%s"]}""".formatted("t".repeat(31)), "tags[0]"),
+                    Arguments.of("a duplicate tag", """
+                            {"tags":["starter","grass","starter"]}""", "tags"));
+        }
+
+        @ParameterizedTest(name = "The one where the update sends {0}, so it is rejected and nothing is changed")
+        @MethodSource("rejectedValues")
+        @DisplayName("The one where the update sends a value the table rejects, so the reader gets a 400 naming the "
+                + "field and nothing is changed")
+        void invalidValueIsRejectedAndNothingIsChanged(String what, String body, String invalidField) {
+            storesBulbasaurAsBisasamFromKanto();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body)
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(400);
+            assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
+                    .containsExactly(invalidField);
+            assertBulbasaurIsStillBisasamFromKanto();
+        }
+
+        @Test
+        @DisplayName("The one where both the localized name and the region are blank, so the reader gets a 400 listing "
+                + "both fields")
+        void eachInvalidFieldIsListed() {
+            storesBulbasaurAsBisasamFromKanto();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"","region":" "}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
+                    .containsExactlyInAnyOrder("localizedName", "region");
+            assertBulbasaurIsStillBisasamFromKanto();
+        }
+
+        @Test
+        @DisplayName("The one where the localized name and region are 50 characters and there are 10 tags of 30 "
+                + "characters, so the update is accepted (200)")
+        void valuesAtTheLimitsAreAccepted() {
+            storesBulbasaur();
+            var name = "n".repeat(50);
+            var region = "r".repeat(50);
+            var tags = IntStream.rangeClosed(0, 9).mapToObj(i -> i + "t".repeat(29)).toList();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"%s","region":"%s","tags":["%s"]}"""
+                            .formatted(name, region, String.join("\",\"", tags)))
+                    .exchange();
+
+            assertThat(response).hasStatusOk();
+            assertThat(response).bodyJson().extractingPath("$.localizedName").isEqualTo(name);
+            assertThat(response).bodyJson().extractingPath("$.region").isEqualTo(region);
+            assertThat(response).bodyJson().extractingPath("$.tags").asArray().hasSize(10);
+        }
+
+        @Test
+        @DisplayName("The one where the body is not valid JSON, so the reader gets a 400 and nothing is changed")
+        void bodyThatIsNotValidJsonIsRejected() {
+            storesBulbasaurAsBisasamFromKanto();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, signedIn())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("{\"localizedName\": \"Bulby\"")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(400);
+            assertBulbasaurIsStillBisasamFromKanto();
+        }
+
+        private void storesBulbasaurAsBisasamFromKanto() {
+            storesBulbasaur();
+            database.sql("UPDATE stored_pokemon SET localized_name = 'Bisasam', region = 'Kanto' WHERE id = 1")
+                    .update();
+        }
+
+        private void assertBulbasaurIsStillBisasamFromKanto() {
+            var viewed = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+            assertThat(viewed).bodyJson().extractingPath("$.localizedName").isEqualTo("Bisasam");
+            assertThat(viewed).bodyJson().extractingPath("$.region").isEqualTo("Kanto");
+            assertThat(viewed).bodyJson().extractingPath("$.tags").asArray().isEmpty();
         }
     }
 

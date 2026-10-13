@@ -3,11 +3,16 @@ package com.xaxage.be.adapter.in.web;
 import com.xaxage.be.application.port.out.PokeApiUnavailableException;
 import com.xaxage.be.domain.exception.PokemonNotFoundException;
 import com.xaxage.be.domain.exception.PokemonNotStoredException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
 /**
@@ -42,5 +47,26 @@ class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(PokemonNotStoredException.class)
     ProblemDetail pokemonNotStored(PokemonNotStoredException notStored) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, notStored.getMessage());
+    }
+
+    /**
+     * Keeps the standard error body, and lists each field of the request body that is not valid, with why.
+     */
+    @Override
+    protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException invalid,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        var problem = invalid.getBody();
+        problem.setProperty("invalidFields", invalid.getBindingResult().getFieldErrors().stream()
+                .map(error -> new InvalidField(error.getField(), error.getDefaultMessage()))
+                .toList());
+        return handleExceptionInternal(invalid, problem, headers, status, request);
+    }
+
+    /**
+     * @param field  the field of the request body, as the reader sent it
+     * @param reason why its value is not valid
+     */
+    record InvalidField(String field, String reason) {
     }
 }
