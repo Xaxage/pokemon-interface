@@ -1,5 +1,6 @@
 package com.xaxage.be.application.service;
 
+import com.xaxage.be.application.port.out.PasswordHasherPort;
 import com.xaxage.be.application.port.out.UserRepositoryPort;
 import com.xaxage.be.domain.exception.UsernameTakenException;
 import com.xaxage.be.domain.model.User;
@@ -27,11 +28,13 @@ class RegisterUserServiceTest {
         void ashIsStoredAndReturned() {
             var users = mock(UserRepositoryPort.class);
             given(users.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+            var passwords = mock(PasswordHasherPort.class);
+            given(passwords.hash("pikachu123")).willReturn("hash-of-pikachu123");
 
-            var registered = new RegisterUserService(users).register("ash", "pikachu123");
+            var registered = new RegisterUserService(users, passwords).register("ash", "pikachu123");
 
             assertThat(registered.username()).isEqualTo("ash");
-            then(users).should().save(new User("ash", "pikachu123"));
+            then(users).should().save(any());
         }
 
         @Test
@@ -40,12 +43,30 @@ class RegisterUserServiceTest {
             var users = mock(UserRepositoryPort.class);
             given(users.existsByUsername("ash")).willReturn(true);
 
-            var service = new RegisterUserService(users);
+            var service = new RegisterUserService(users, mock(PasswordHasherPort.class));
 
             assertThatThrownBy(() -> service.register("ash", "another-password"))
                     .isInstanceOf(UsernameTakenException.class)
                     .hasMessage("The username ash is already taken");
             then(users).should(never()).save(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("Must never store passwords in readable form")
+    class NeverStoresPasswordsInReadableForm {
+
+        @Test
+        @DisplayName("The one where \"ash\" registers with \"pikachu123\", so only the hash of \"pikachu123\" is stored")
+        void onlyTheHashIsStored() {
+            var users = mock(UserRepositoryPort.class);
+            given(users.save(any())).willAnswer(invocation -> invocation.getArgument(0));
+            var passwords = mock(PasswordHasherPort.class);
+            given(passwords.hash("pikachu123")).willReturn("hash-of-pikachu123");
+
+            new RegisterUserService(users, passwords).register("ash", "pikachu123");
+
+            then(users).should().save(new User("ash", "hash-of-pikachu123"));
         }
     }
 }

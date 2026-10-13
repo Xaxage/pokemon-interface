@@ -40,7 +40,7 @@ class UserPersistenceAdapterTest {
         @Test
         @DisplayName("The one where ash is saved, so ash reads back the same")
         void savedUserReadsBackTheSame() {
-            var ash = new User("ash", "pikachu123");
+            var ash = new User("ash", "hash-of-pikachu123");
 
             var saved = adapter.save(ash);
             entityManager.flush();
@@ -58,7 +58,7 @@ class UserPersistenceAdapterTest {
         @Test
         @DisplayName("The one where ash is registered and misty is not, so only ash is taken")
         void onlyARegisteredUsernameIsTaken() {
-            entityManager.persistAndFlush(UserEntity.from(new User("ash", "pikachu123")));
+            entityManager.persistAndFlush(UserEntity.from(new User("ash", "hash-of-pikachu123")));
 
             assertThat(adapter.existsByUsername("ash")).isTrue();
             assertThat(adapter.existsByUsername("misty")).isFalse();

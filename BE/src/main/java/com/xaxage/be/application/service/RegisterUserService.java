@@ -1,6 +1,7 @@
 package com.xaxage.be.application.service;
 
 import com.xaxage.be.application.port.in.RegisterUserUseCase;
+import com.xaxage.be.application.port.out.PasswordHasherPort;
 import com.xaxage.be.application.port.out.UserRepositoryPort;
 import com.xaxage.be.domain.exception.UsernameTakenException;
 import com.xaxage.be.domain.model.User;
@@ -10,9 +11,11 @@ import org.springframework.stereotype.Service;
 public class RegisterUserService implements RegisterUserUseCase {
 
     private final UserRepositoryPort users;
+    private final PasswordHasherPort passwords;
 
-    public RegisterUserService(UserRepositoryPort users) {
+    public RegisterUserService(UserRepositoryPort users, PasswordHasherPort passwords) {
         this.users = users;
+        this.passwords = passwords;
     }
 
     @Override
@@ -20,6 +23,6 @@ public class RegisterUserService implements RegisterUserUseCase {
         if (users.existsByUsername(username)) {
             throw new UsernameTakenException(username);
         }
-        return users.save(new User(username, password));
+        return users.save(new User(username, passwords.hash(password)));
     }
 }

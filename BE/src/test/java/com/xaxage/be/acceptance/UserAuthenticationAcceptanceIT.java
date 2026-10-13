@@ -108,6 +108,23 @@ class UserAuthenticationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must never store passwords in readable form")
+    class NeverStoresPasswordsInReadableForm {
+
+        @Test
+        @DisplayName("The one where the stored password for \"ash\" is a hash, not \"pikachu123\"")
+        void storedPasswordIsAHash() {
+            register("ash", "pikachu123");
+
+            var stored = database.sql("SELECT password_hash FROM app_user WHERE username = 'ash'")
+                    .query(String.class).single();
+
+            assertThat(stored).doesNotContain("pikachu123");
+            assertThat(stored).matches("\\$2[aby]\\$\\d{2}\\$[./A-Za-z0-9]{53}");
+        }
+    }
+
     private MvcTestResult register(String username, String password) {
         return mvc.post().uri("/api/auth/register")
                 .contentType(MediaType.APPLICATION_JSON)
