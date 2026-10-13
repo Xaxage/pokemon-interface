@@ -305,6 +305,56 @@ class LocalDataModificationAcceptanceIT {
         }
     }
 
+    @Nested
+    @DisplayName("Must let only signed-in users update or delete")
+    class LetsOnlySignedInUsersUpdateOrDelete {
+
+        @Test
+        @DisplayName("The one where an update with no token gets a 401 and nothing is changed")
+        void updateWithNoTokenIsUnauthorizedAndChangesNothing() {
+            storesBulbasaur();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"Bisasam","region":"Kanto","tags":["starter"]}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertBulbasaurIsUnchanged();
+        }
+
+        @Test
+        @DisplayName("The one where the token has expired, so the update gets a 401 as well")
+        void updateWithAnExpiredTokenIsUnauthorized() {
+            storesBulbasaur();
+            var now = Instant.now().getEpochSecond();
+
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token(now - 7200, now - 3600))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"Bisasam","region":"Kanto","tags":["starter"]}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            assertBulbasaurIsUnchanged();
+        }
+
+        private void assertBulbasaurIsUnchanged() {
+            var viewed = mvc.get().uri("/api/stored-pokemon/{id}", 1).exchange();
+            assertThat(viewed).bodyJson().hasPath("$.localizedName");
+            assertThat(viewed).bodyJson().extractingPath("$.localizedName").isNull();
+            assertThat(viewed).bodyJson().hasPath("$.region");
+            assertThat(viewed).bodyJson().extractingPath("$.region").isNull();
+            assertThat(viewed).bodyJson().extractingPath("$.tags").asArray().isEmpty();
+        }
+    }
+
     /**
      * @return the Authorization header of a user who has just signed in: a bearer token signed with HS256, valid
      * for the next hour

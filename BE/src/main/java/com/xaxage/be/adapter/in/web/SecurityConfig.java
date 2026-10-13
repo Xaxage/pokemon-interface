@@ -19,7 +19,8 @@ import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 
 /**
- * Synchronising needs a signed-in user, shown by a valid bearer token; everything else is open to anyone.
+ * Synchronising, updating and deleting stored Pokémon need a signed-in user, shown by a valid bearer token;
+ * everything else is open to anyone.
  */
 @Configuration
 class SecurityConfig {
@@ -32,6 +33,8 @@ class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(requests -> requests
                         .requestMatchers(HttpMethod.POST, "/api/stored-pokemon/*/sync").authenticated()
+                        .requestMatchers(HttpMethod.PUT, "/api/stored-pokemon/*").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/api/stored-pokemon/*").authenticated()
                         .anyRequest().permitAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(Customizer.withDefaults())

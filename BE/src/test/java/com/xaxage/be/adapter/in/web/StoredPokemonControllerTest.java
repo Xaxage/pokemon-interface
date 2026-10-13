@@ -276,4 +276,35 @@ class StoredPokemonControllerTest {
             then(deleteStoredPokemon).should().delete(1);
         }
     }
+
+    @Nested
+    @DisplayName("Must let only signed-in users update or delete")
+    class LetsOnlySignedInUsersUpdateOrDelete {
+
+        @Test
+        @DisplayName("The one where a visitor with no token updates, so they get a 401 with the standard error body")
+        void updateWithNoTokenGets401() {
+            var response = mvc.put().uri("/api/stored-pokemon/{id}", 1)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"localizedName":"Bisasam"}""")
+                    .exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            then(editStoredPokemon).shouldHaveNoInteractions();
+        }
+
+        @Test
+        @DisplayName("The one where a visitor with no token deletes, so they get a 401 with the standard error body")
+        void deleteWithNoTokenGets401() {
+            var response = mvc.delete().uri("/api/stored-pokemon/{id}", 1).exchange();
+
+            assertThat(response).hasStatus(HttpStatus.UNAUTHORIZED);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(401);
+            then(deleteStoredPokemon).shouldHaveNoInteractions();
+        }
+    }
 }
