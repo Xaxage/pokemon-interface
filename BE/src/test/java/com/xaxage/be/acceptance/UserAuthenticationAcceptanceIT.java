@@ -4,6 +4,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -71,6 +73,38 @@ class UserAuthenticationAcceptanceIT {
             assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
             assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(409);
             assertThat(response).bodyJson().extractingPath("$.title").isEqualTo("Conflict");
+        }
+    }
+
+    @Nested
+    @DisplayName("Must reject registrations with invalid values (400, with the standard error body)")
+    class RejectsRegistrationsWithInvalidValues {
+
+        @Test
+        @DisplayName("The one where \"ash\" registers with \"pikachu123\", so the registration is accepted")
+        void validRegistrationIsAccepted() {
+            var response = register("ash", "pikachu123");
+
+            assertThat(response).hasStatus(HttpStatus.CREATED);
+        }
+
+        @ParameterizedTest(name = "The one where \"{0}\" registers with \"{1}\", so it is rejected ({2})")
+        @CsvSource({
+                "as, pikachu123, username under 3 characters, username",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, pikachu123, username over 30 characters, username",
+                "ash, short, password under 8 characters, password"})
+        @DisplayName("The one where the username or password breaks the limits, so the reader gets a 400 naming the "
+                + "field and no one is registered")
+        void invalidRegistrationIsRejected(String username, String password, String why, String invalidField) {
+            var response = register(username, password);
+
+            assertThat(response).hasStatus(HttpStatus.BAD_REQUEST);
+            assertThat(response).hasContentType(MediaType.APPLICATION_PROBLEM_JSON);
+            assertThat(response).bodyJson().extractingPath("$.status").isEqualTo(400);
+            assertThat(response).bodyJson().extractingPath("$.invalidFields[*].field").asArray()
+                    .containsExactly(invalidField);
+            assertThat(database.sql("SELECT COUNT(*) FROM app_user WHERE username = ?").param(username)
+                    .query(Integer.class).single()).isZero();
         }
     }
 
