@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Import;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Runs against the project's database, starting each test with no users; every test is rolled back.
+ * Runs against the in-memory test database, starting each test with no users; every test is rolled back.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
